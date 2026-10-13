@@ -78,7 +78,7 @@ type DocumentTypeCapability struct {
 }
 
 var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
-	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendMOPSkill, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
+	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendSVGDesign, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
 		Slot:         SlotSourceWorkbook,
 		Required:     false,
 		Multiple:     false,
@@ -181,6 +181,18 @@ const PPTXBackendMOPSkill = "mop-skill"
 // first request unless OFFICECLI_MOP_PRESENTATION_ROOT points somewhere
 // complete.
 const PPTXBackendJSSDKDesign = "aippt-jssdk-design"
+
+// PPTXBackendSVGDesign is the desktop's default PPTX backend: the model writes
+// each slide as constrained SVG, OfficeCLI lints and repairs it page by page,
+// and every accepted page arrives as one `slide.svg` op. The embedded editor
+// compiles that SVG with the same compiler OfficeCLI exports with, so the
+// document drawn live is the document in the PPTX — gradients, free paths and
+// shadows included, which the `shape.add` stream could not carry.
+//
+// It needs a bridge that declares `pptx_svg_design.v1`. An older bridge is
+// refused with an upgrade message rather than quietly given another backend:
+// a deck silently made by a different path is not what was asked for.
+const PPTXBackendSVGDesign = "svg-design"
 
 // GenericPreviewExtensions can be opened in the preview without belonging to
 // a generated document type.

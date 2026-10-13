@@ -22,6 +22,7 @@ func readRecoverySessionOpen(t *testing.T, transport *cancelPersistTransport) ca
 	if req.Method == "capabilities/get" {
 		transport.writeResponse(t, req.ID, map[string]any{
 			"pptx_jssdk_progressive": map[string]any{"v2": true},
+			"pptx_svg_design":        map[string]any{"v1": true},
 		})
 		req = transport.readRequest(t)
 	}

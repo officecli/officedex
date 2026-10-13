@@ -1293,3 +1293,121 @@ describe("template replay", () => {
     expect(source).toContain("textFrame.textRange.text");
   });
 });
+
+describe("slide.svg", () => {
+  const SVG = (label: string) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#FFFFFF"/><text x="80" y="120" font-size="40">${label}</text></svg>`;
+
+  function svgStream(slides: number): VibeOp[] {
+    const ops: VibeOp[] = [{ seq: 1, op: "deck.begin", slides, generator: "svg-design", contract: "svg-design/v1" }];
+    let seq = 1;
+    for (let slide = 1; slide <= slides; slide += 1) {
+      ops.push({ seq: ++seq, op: "slide.svg", slide, svg: SVG(`第 ${slide} 页`), assets: [], objects: 2 });
+      ops.push({ seq: ++seq, op: "slide.end", slide });
+    }
+    ops.push({ seq: ++seq, op: "deck.end", slides });
+    return ops;
+  }
+
+  /** The compiler the embedded editor installs, recording what it was asked to draw. */
+  function installSvgHost() {
+    const drawn: Array<{ slideId: string; svg: string; chunkSize?: number; assets?: Record<string, string> }> = [];
+    const host = {
+      version: 1,
+      draw: vi.fn(async (context: { sync(): Promise<void> }, slide: { id: string }, svg: string, options: { chunkSize?: number; assets?: Record<string, string>; onChunk?: () => Promise<void> } = {}) => {
+        drawn.push({ slideId: slide.id, svg, chunkSize: options.chunkSize, assets: options.assets });
+        if (options.chunkSize) {
+          await context.sync();
+          await options.onChunk?.();
+        }
+        return { objects: 2, diagnostics: [] };
+      }),
+    };
+    (window as unknown as { __presentationSvgSlide?: unknown }).__presentationSvgSlide = host;
+    return { host, drawn };
+  }
+
+  afterEach(() => {
+    delete (window as unknown as { __presentationSvgSlide?: unknown }).__presentationSvgSlide;
+  });
+
+  it("counts as drawing content, so an SVG-only stream opens a live draft", () => {
+    expect(hasPptxDrawingContent(svgStream(1))).toBe(true);
+    expect(hasPptxDrawingContent(svgStream(1).slice(0, 1))).toBe(false);
+  });
+
+  it("hands each page to the editor's compiler, on its own slide, in order", async () => {
+    const { drawn } = installSvgHost();
+    const powerPoint = fakePowerPoint();
+    const result = await runChunkScript(
+      buildOpsChunkScript(svgStream(2), { fontLatin: "Arial", fontCJK: "Microsoft YaHei" }, 0),
+      powerPoint,
+    ) as { executed: number; skipped: number; svgObjects: number };
+    expect(result).toMatchObject({ executed: 2, skipped: 0, svgObjects: 4 });
+    expect(drawn.map((page) => page.slideId)).toEqual(["s1", "s2"]);
+    expect(drawn[0].svg).toContain("第 1 页");
+    expect(drawn[1].svg).toContain("第 2 页");
+    // Catching up: one sync for the whole page, no beats.
+    expect(drawn[0].chunkSize).toBeUndefined();
+    expect(powerPoint.deck).toHaveLength(2);
+  });
+
+  it("writes the page a few objects per beat while performing", async () => {
+    const { drawn } = installSvgHost();
+    await runChunkScript(
+      buildOpsChunkScript(svgStream(1), { fontLatin: "Arial", fontCJK: "Microsoft YaHei" }, 1),
+      fakePowerPoint(),
+    );
+    expect(drawn[0].chunkSize).toBeGreaterThan(0);
+  });
+
+  it("passes the pictures a page references by name", async () => {
+    const { drawn } = installSvgHost();
+    const ops = svgStream(1);
+    ops[1] = { ...ops[1], assets: [{ name: "hero.png", digest: "a".repeat(64) }] };
+    await runChunkScript(
+      buildOpsChunkScript(ops, { fontLatin: "Arial", fontCJK: "Microsoft YaHei", images: { ["a".repeat(64)]: "QUJD" } }, 0),
+      fakePowerPoint(),
+    );
+    expect(drawn[0].assets).toEqual({ "hero.png": "QUJD" });
+  });
+
+  it("fails the replay by name when the editor build has no SVG compiler", async () => {
+    await expect(
+      runChunkScript(
+        buildOpsChunkScript(svgStream(1), { fontLatin: "Arial", fontCJK: "Microsoft YaHei" }, 0),
+        fakePowerPoint(),
+      ),
+    ).rejects.toThrow(/SVG_SLIDE_UNSUPPORTED/u);
+  });
+
+  it("draws a whole SVG deck through the sequencer and saves it", async () => {
+    const { drawn } = installSvgHost();
+    const { controller, saved } = fakeController();
+    const statuses: string[] = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (status) => statuses.push(status.state) });
+    const ops = svgStream(3);
+    sequencer.update({ taskId: "svg", ops: ops.slice(0, 3), completed: false });
+    await flush();
+    await flush();
+    sequencer.update({ taskId: "svg", ops, completed: true, outcome: "succeeded" });
+    for (let turn = 0; turn < 8; turn += 1) await flush();
+    expect(drawn.map((page) => page.slideId)).toEqual(["s1", "s2", "s3"]);
+    expect(saved).toHaveBeenCalledTimes(1);
+    expect(statuses.at(-1)).toBe("done");
+    expect(statuses).not.toContain("failed");
+    // One history step per page, anchored on the page's own op.
+    expect(captureTimelineNode.mock.calls.map(([input]) => (input as { slide: number }).slide)).toEqual([1, 2, 3]);
+  });
+
+  it("surfaces a missing compiler as a failed replay, not a silent blank deck", async () => {
+    const { controller, saved } = fakeController();
+    const statuses: Array<{ state: string; error?: string }> = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (status) => statuses.push(status) });
+    sequencer.update({ taskId: "svg-old", ops: svgStream(1), completed: true, outcome: "succeeded" });
+    for (let turn = 0; turn < 6; turn += 1) await flush();
+    expect(statuses.at(-1)?.state).toBe("failed");
+    expect(statuses.at(-1)?.error).toContain("SVG_SLIDE_UNSUPPORTED");
+    expect(saved).not.toHaveBeenCalled();
+  });
+});

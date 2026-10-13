@@ -144,6 +144,7 @@ type bridgeCapabilities struct {
 	imageWatermarkSupported   bool
 	progressiveJSSDKSupported bool
 	animationJSSDKSupported   bool
+	svgDesignSupported        bool
 }
 
 type listenerEntry struct {
@@ -678,6 +679,10 @@ func (c *Client) SessionID() string {
 // projected from the GenerateInput.
 // OfficeDex has one PPTX authoring path. Retired environment switches cannot
 // route a new request through an older Skill or compiler.
+// svgDesignUnsupportedMessage is what the user sees when the bridge is older
+// than the svg-design contract. It names the fix; there is no fallback.
+const svgDesignUnsupportedMessage = "当前 OfficeCLI 版本不支持新的 PPT 生成方式（缺少 pptx_svg_design.v1 能力）。请更新 OfficeCLI 或重新安装最新版 OfficeDex 后重试。"
+
 func defaultPPTXBackendFor(documentType types.DocumentType) string {
 	return types.Capability(documentType).DefaultPPTXBackend
 }
@@ -758,6 +763,30 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 			}
 			if !caps.progressiveJSSDKSupported {
 				return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供有来源验证的 JSSDK 渐进式生成合同；请重建或更新 OfficeCLI")
+			}
+		}
+
+		/*
+		 * svg-design streams whole pages as `slide.svg` ops, which only a
+		 * bridge that declares pptx_svg_design.v1 produces. A bridge without
+		 * it is refused here, by name: sending the request down would either
+		 * fail on an unknown backend or, worse, be answered by some other
+		 * path whose deck the user did not ask for.
+		 */
+		if input.PPTXBackend == types.PPTXBackendSVGDesign {
+			c.mu.Lock()
+			caps := c.capabilities
+			c.mu.Unlock()
+			if !caps.loaded && !caps.svgDesignSupported {
+				if _, err := c.GetCapabilities(ctx); err != nil {
+					return TaskInvokeResult{}, fmt.Errorf("无法确认 OfficeCLI 是否支持 SVG 设计生成: %w", err)
+				}
+				c.mu.Lock()
+				caps = c.capabilities
+				c.mu.Unlock()
+			}
+			if !caps.svgDesignSupported {
+				return TaskInvokeResult{}, errors.New(svgDesignUnsupportedMessage)
 			}
 		}
 	}
@@ -1008,6 +1037,7 @@ func bridgeCapabilitiesFromPayload(raw []byte) bridgeCapabilities {
 		loaded:                    true,
 		progressiveJSSDKSupported: nestedBool(payload, true, "pptx_jssdk_progressive", "v2"),
 		animationJSSDKSupported:   nestedBool(payload, true, "pptx_jssdk_animation", "v1"),
+		svgDesignSupported:        nestedBool(payload, true, "pptx_svg_design", "v1"),
 		imageWatermarkSupported:   nestedBool(payload, true, "image_generation", "watermark", "supported") || nestedBool(payload, true, "document_generation", "img", "image_generation", "watermark", "supported"),
 	}
 }

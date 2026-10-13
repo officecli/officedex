@@ -201,7 +201,7 @@ export function releaseLiveDraft(filePath: string) {
  * document that already had those objects on the page.
  */
 export function hasPptxDrawingContent(ops: readonly VibeOp[] = []): boolean {
-  return ops.some(op => op.op === "shape.add" || op.op === "diagram.add");
+  return ops.some(op => DRAWING_OPS.has(op.op));
 }
 
 export function buildReplayFeed(input: {
@@ -278,6 +278,16 @@ interface ChunkContext {
   templateInserted?: boolean;
 }
 
+/**
+ * Ops that put something on a page. `slide.svg` carries a whole page as
+ * constrained SVG; the embedded editor compiles it with the same compiler the
+ * backend exports with, so the page drawn here is the page in the PPTX.
+ */
+const SLIDE_SVG_OP = "slide.svg";
+const DRAWING_OPS: ReadonlySet<string> = new Set(["shape.add", "diagram.add", SLIDE_SVG_OP]);
+/** Top-level objects of an SVG page written per beat while performing. */
+const SVG_OBJECTS_PER_BEAT = 3;
+
 interface AttentionRect {
   wholeSlide?: boolean;
   left: number;
@@ -287,8 +297,9 @@ interface AttentionRect {
 }
 
 function attentionRectFromOps(ops: readonly VibeOp[]): AttentionRect | undefined {
-  const lastFocusOp = ops.filter((op) => op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.end").at(-1);
-  if (lastFocusOp?.op === "slide.end") return { left: 9, top: 9, width: 942, height: 522, wholeSlide: true };
+  const lastFocusOp = ops.filter((op) => DRAWING_OPS.has(op.op) || op.op === "slide.end").at(-1);
+  // An SVG page fills the whole slide at once; so does a finished page.
+  if (lastFocusOp?.op === "slide.end" || lastFocusOp?.op === SLIDE_SVG_OP) return { left: 9, top: 9, width: 942, height: 522, wholeSlide: true };
   const shapes = ops
     .map((op) => op.shape)
     .filter((shape): shape is Record<string, unknown> => Boolean(shape && typeof shape === "object"))
@@ -335,12 +346,15 @@ export function buildOpsChunkScript(
     if ((op.op === "slide.end" || op.op === "deck.end") && index > 0 && ops[index - 1].op === "shape.add") {
       captureAnchors.push(ops[index - 1].seq);
     }
+    // An SVG page is one step of the history however many objects it holds.
+    if (op.op === SLIDE_SVG_OP) captureAnchors.push(op.seq);
   }
   const templateBinding = ops.find((op) => op.op === "slide.begin" && op.template);
   const data = JSON.stringify({
     fontLatin: context.fontLatin || "Aptos",
     fontCJK: context.fontCJK || "Microsoft YaHei",
     images: context.images ?? {},
+    svgObjectsPerBeat: SVG_OBJECTS_PER_BEAT,
     templateLayoutId: templateBinding?.template?.layoutId || "",
     templateAssetRoles: templateBinding?.template?.assetRoles || [],
     capture: context.capture === true,
@@ -422,6 +436,7 @@ return await PowerPoint.run(async (context) => {
     templateInserted = true;
   }
   let executed = 0;
+  let svgObjects = 0;
   let pendingSync = 0;
   // Typing's hot-loop sync, measured: each one refines the trip average that
   // sliceCountFor sizes the next slices with.
@@ -860,6 +875,47 @@ return await PowerPoint.run(async (context) => {
       // group lands rather than once a page is done.
       for (const member of group) await captureAfter(member.seq, member.shape);
       if (SETTLE_MS > 0) await sleep(beat(SETTLE_MS, entry.shape, entry.seq + 7));
+    } else if (entry.op === "slide.svg") {
+      // A whole page as constrained SVG. The editor compiles it with the
+      // compiler the backend exports with, so nothing is approximated here.
+      const svgHost = globalThis.__presentationSvgSlide;
+      if (!svgHost || typeof svgHost.draw !== "function") {
+        throw new Error("SVG_SLIDE_UNSUPPORTED: this editor build cannot draw slide.svg pages; rebuild the embedded presentation editor");
+      }
+      await useSlide(entry.slide || slideNumber || 1);
+      await flush();
+      if (attentionSupported) {
+        try {
+          context.presentation.focusAttention({ left: 9, top: 9, width: 942, height: 522, wholeSlide: true });
+          await context.sync();
+        } catch (error) {
+          attentionSupported = false;
+          console.warn("[vibeReplay] page attention disabled:", error);
+        }
+      }
+      if (SLIDE_MS > 0) await sleep(beat(SLIDE_MS, null, entry.seq));
+      const assets = {};
+      for (const reference of Array.isArray(entry.assets) ? entry.assets : []) {
+        const bytes = reference && reference.digest ? data.images[reference.digest] : undefined;
+        if (bytes && reference.name) assets[reference.name] = bytes;
+      }
+      let beatIndex = 0;
+      // Performing: the page is written a few objects at a time, each beat
+      // synced so it shows. Catching up: one sync for the whole page.
+      const drawn = await svgHost.draw(context, slide, String(entry.svg || ""), PACE_MS > 0
+        ? {
+            assets,
+            chunkSize: data.svgObjectsPerBeat,
+            onChunk: async () => {
+              beatIndex += 1;
+              if (SETTLE_MS > 0) await sleep(beat(SETTLE_MS, null, entry.seq + beatIndex));
+            },
+          }
+        : { assets });
+      await context.sync();
+      svgObjects += drawn && typeof drawn.objects === "number" ? drawn.objects : 0;
+      executed += 1;
+      await captureAfter(entry.seq, null);
     } else if (entry.op === "slide.end") {
       if (entry.slide) await useSlide(entry.slide);
       await flush();
@@ -935,7 +991,7 @@ return await PowerPoint.run(async (context) => {
   if (data.ops.some((entry) => entry.op === "deck.end") && !data.keepAttention) await focusOn(null);
   // typed counts the extra passes text made on its way to being complete;
   // zero means the streaming never happened, which is invisible otherwise.
-  return { executed, skipped, typed, veilsUnsupported, templateInserted, captures, tripMs: Math.round(tripMs), encodeMs: Math.round(encodeMs) };
+  return { executed, skipped, typed, svgObjects, veilsUnsupported, templateInserted, captures, tripMs: Math.round(tripMs), encodeMs: Math.round(encodeMs) };
 });
 `;
 }
@@ -1182,7 +1238,7 @@ export class VibeReplaySequencer {
     if (op.op === "slide.begin" && template?.assetDir && !this.templateAssetDir) {
       this.templateAssetDir = String(template.assetDir);
     }
-    if ((op.op === "slide.begin" || op.op === "slide.replace") && typeof op.slide === "number") {
+    if ((op.op === "slide.begin" || op.op === "slide.replace" || op.op === SLIDE_SVG_OP) && typeof op.slide === "number") {
       this.currentSlide = op.slide;
       this.drawnSlides.add(op.slide);
     }
@@ -1200,6 +1256,9 @@ export class VibeReplaySequencer {
       if (op.op === "shape.add" && op.shape?.kind === "picture" && digest) digests.add(digest);
       const patchDigest = op.fill?.imageRef?.digest;
       if (op.op === "shape.update" && patchDigest) digests.add(patchDigest);
+      if (op.op === SLIDE_SVG_OP) {
+        for (const asset of op.assets ?? []) if (asset?.digest) digests.add(asset.digest);
+      }
     }
     if (digests.size === 0 || !this.assetsDir) return {};
     const resolved: Record<string, string> = {};
@@ -1306,7 +1365,7 @@ export class VibeReplaySequencer {
           this.onOp?.(op);
         }
         if (this.currentSlide) this.emit({ state: "drawing", slide: this.currentSlide });
-        const drawable = chunk.some((op) => op.op === "slide.end" || op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
+        const drawable = chunk.some((op) => op.op === "slide.end" || DRAWING_OPS.has(op.op) || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
         let chunkCaptures: Array<{ seq: number; content: string; shape?: string }> = [];
         if (drawable) {
           this.lastAttentionRect = attentionRectFromOps(chunk) ?? this.lastAttentionRect;
@@ -1378,7 +1437,7 @@ export class VibeReplaySequencer {
               `${elapsedMs}ms`,
             );
           }
-          const requested = chunk.filter((op) => op.op === "shape.add" || op.op === "diagram.add").length;
+          const requested = chunk.filter((op) => DRAWING_OPS.has(op.op)).length;
           // An editor that cannot draw translucent fills says so once; asking
           // again on every group would cost a wasted round trip each time.
           if ((outcome as { result?: { veilsUnsupported?: boolean } } | undefined)?.result?.veilsUnsupported) {
