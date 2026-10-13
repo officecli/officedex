@@ -15,7 +15,7 @@ export const GENERATION_QUIET_AFTER_MS = 30_000;
 export function lastContentOpKind(ops: readonly VibeOp[] = []): "writing" | "drawing" | null {
   for (let index = ops.length - 1; index >= 0; index -= 1) {
     const op = ops[index];
-    if (op.op === "diagram.add") return "drawing";
+    if (op.op === "diagram.add" || op.op === "slide.svg") return "drawing";
     if (op.op !== "shape.add" && op.op !== "shape.update") continue;
     const kind = typeof op.shape?.kind === "string" ? op.shape.kind : "";
     if (kind === "picture" || kind === "chart" || kind === "sparkline" || op.fill?.imageRef || op.shape?.imageRef) {

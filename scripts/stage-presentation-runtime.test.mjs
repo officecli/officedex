@@ -438,3 +438,88 @@ test("sourceRepository defaults to the neutral component name and follows the en
     "example.com/presentation",
   );
 });
+
+/**
+ * The svg-design backend's tools.
+ *
+ * They are what makes svg-design usable from a packaged tree at all: unlike
+ * the JSSDK Host runner they do not need a browser, because they load the
+ * compiler from dist-ssr. So the staged tree has to carry the two entry points,
+ * everything they import, and a dist-ssr that actually bundles the compiler —
+ * and say so, because the failure otherwise is a lint that cannot start,
+ * minutes into a generation.
+ */
+async function withSvgTools(source, { compiler = true } = {}) {
+  const write = async (relative, body) => {
+    await mkdir(path.dirname(path.join(source, relative)), { recursive: true });
+    await writeFile(path.join(source, relative), body);
+  };
+  await write(
+    "tools/execute-svg.mjs",
+    'import { createSvgSlideHost } from "./lib/svg-slide-host.mjs";\nimport { readSvgPages } from "./lib/svg-slide-runtime.mjs";\nexport const run = [createSvgSlideHost, readSvgPages];\n',
+  );
+  await write(
+    "tools/svg-lint.mjs",
+    'import { createSvgSlideHost } from "./lib/svg-slide-host.mjs";\nexport const lint = createSvgSlideHost;\n',
+  );
+  await write(
+    "tools/lib/svg-slide-host.mjs",
+    'import { wrapPowerPointHostWithVibeOps } from "./jssdk-vibe-ops.mjs";\nexport const createSvgSlideHost = () => wrapPowerPointHostWithVibeOps;\n',
+  );
+  await write("tools/lib/svg-slide-runtime.mjs", "export const readSvgPages = () => [];\n");
+  if (compiler) {
+    await write(
+      "dist-ssr/manifest.json",
+      JSON.stringify({ schemaVersion: 1, entryPoints: { "packages/svg-slide/src/index.ts": "svg-slide" } }),
+    );
+    await write("dist-ssr/svg-slide.js", "const _0x3c4d=1;export const compileSvg=_0x3c4d;");
+  }
+}
+
+test("stages the svg-design tools, their imports and records the compiler bundle", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await withSvgTools(source);
+  await stagePresentationRuntime({ source, dest });
+  for (const relative of [
+    "tools/execute-svg.mjs",
+    "tools/svg-lint.mjs",
+    "tools/lib/svg-slide-host.mjs",
+    "tools/lib/svg-slide-runtime.mjs",
+  ]) {
+    await stat(path.join(dest, relative));
+  }
+  const { svgDesign } = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.equal(svgDesign.staged, true);
+  assert.equal(svgDesign.compiler, true);
+  // No browser in a packaged tree: widths are estimated, and the build says so.
+  assert.equal(svgDesign.measurement, "estimate");
+  assert.deepEqual(svgDesign.entries, ["tools/execute-svg.mjs", "tools/svg-lint.mjs"]);
+  assert.ok(svgDesign.closure.includes("tools/lib/svg-slide-host.mjs"));
+  assert.ok(svgDesign.closure.includes("tools/lib/jssdk-vibe-ops.mjs"));
+});
+
+test("records an older presentation checkout as having no svg-design tools", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await stagePresentationRuntime({ source, dest });
+  const { svgDesign } = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.deepEqual(svgDesign, { staged: false, entries: [], closure: [], compiler: false, measurement: "estimate" });
+});
+
+test("records a dist-ssr that was built without the SVG compiler", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await withSvgTools(source, { compiler: false });
+  await stagePresentationRuntime({ source, dest });
+  const { svgDesign } = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.equal(svgDesign.staged, true);
+  assert.equal(svgDesign.compiler, false);
+});
+
+test("refuses svg-design tools whose imports were left behind", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await withSvgTools(source);
+  await rm(path.join(source, "tools/lib/svg-slide-runtime.mjs"), { force: true });
+  await assert.rejects(
+    stagePresentationRuntime({ source, dest }),
+    /runner is incomplete[\s\S]*tools\/lib\/svg-slide-runtime\.mjs/,
+  );
+});

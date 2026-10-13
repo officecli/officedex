@@ -14,6 +14,7 @@ import {
   replacementTargetText,
   scopedPrompt,
 } from "./pptxEditScope";
+import { isRedesignInstruction, redesignSlides, redesignTargetSlides } from "./pptxRedesignRun";
 
 /**
  * Editing the deck that is already open, in place.
@@ -87,6 +88,27 @@ export function createPptxEditRunner(deps: PptxEditDeps) {
      */
     const before = await withLog("pptx-edit.inspect", () => deps.controller.inspect());
     assertLive();
+
+    /*
+     * A redesign is not a scripted edit.
+     *
+     * "Redesign this slide" asks for the page to be laid out afresh, which the
+     * model does well as a picture and badly as forty property writes. That
+     * instruction takes the SVG round trip, one slide at a time — one slide,
+     * a range, "from page 6 on", or the whole deck, which is how a finished
+     * deck is redone in part. Everything else — and a redesign on an editor
+     * build without the SVG surface — stays on the script path below.
+     */
+    if (isRedesignInstruction(instruction)) {
+      const targets = redesignTargetSlides(before, instruction);
+      logShellEvent("pptx-edit.redesign", { slides: targets.map((target) => target.position + 1) });
+      if (targets.length > 0) {
+        const redesigned = await withLog("pptx-edit.redesign.run", () =>
+          redesignSlides(deps, request, targets, assertLive, (work) => withDeadline(work, signal, PLAN_TIMEOUT_MS)),
+        );
+        if (redesigned) return redesigned;
+      }
+    }
 
     /*
      * The boundary, decided before the planner is called and recorded either way.

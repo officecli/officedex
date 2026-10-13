@@ -456,6 +456,14 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.SavePptxEditorSnapshot(input)
+	case "ReadDrawingAsset":
+		// Live drawing reads a deck's pictures through this; without it every
+		// picture in a replayed stream stays a placeholder.
+		var input ReadDrawingAssetInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ReadDrawingAsset(input)
 	case "SavePptxEditorAsset":
 		var input SavePptxEditorAssetInput
 		if err := decodeRealClientInput(raw, &input); err != nil {

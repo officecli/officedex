@@ -183,6 +183,7 @@ func newClientWithFake(t *testing.T) (*Client, *fakeTransport) {
 		t.Fatalf("Start: %v", err)
 	}
 	client.capabilities.progressiveJSSDKSupported = true // fake models the current bridge
+	client.capabilities.svgDesignSupported = true
 	return client, fake
 }
 
@@ -499,8 +500,8 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
 	}
-	if args["pptx_backend"] != types.PPTXBackendMOPSkill {
-		t.Errorf("pptx_backend = %v, want %v for OfficeDex PPTX generation", args["pptx_backend"], types.PPTXBackendMOPSkill)
+	if args["pptx_backend"] != types.PPTXBackendSVGDesign {
+		t.Errorf("pptx_backend = %v, want %v for OfficeDex PPTX generation", args["pptx_backend"], types.PPTXBackendSVGDesign)
 	}
 	fake.writeResponse(t, second.idString(), map[string]any{
 		"task_id":    "task-x",
@@ -1935,11 +1936,11 @@ func TestDefaultPPTXBackendIgnoresRetiredKillSwitch(t *testing.T) {
 		value string
 		want  string
 	}{
-		{name: "unset", value: "", want: types.PPTXBackendMOPSkill},
-		{name: "zero", value: "0", want: types.PPTXBackendMOPSkill},
-		{name: "off", value: "off", want: types.PPTXBackendMOPSkill},
-		{name: "false", value: "FALSE", want: types.PPTXBackendMOPSkill},
-		{name: "on", value: "1", want: types.PPTXBackendMOPSkill},
+		{name: "unset", value: "", want: types.PPTXBackendSVGDesign},
+		{name: "zero", value: "0", want: types.PPTXBackendSVGDesign},
+		{name: "off", value: "off", want: types.PPTXBackendSVGDesign},
+		{name: "false", value: "FALSE", want: types.PPTXBackendSVGDesign},
+		{name: "on", value: "1", want: types.PPTXBackendSVGDesign},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.value == "" {
@@ -1981,15 +1982,53 @@ func TestDefaultPPTXBackendIsEmptyForOtherTypes(t *testing.T) {
  * the same list.
  */
 func TestInvokeGeneratePassesKnownPPTXBackendsThrough(t *testing.T) {
-	for _, backend := range []string{"", types.PPTXBackendMOPSkill, types.PPTXBackendJSSDKDesign} {
+	for _, backend := range []string{"", types.PPTXBackendSVGDesign, types.PPTXBackendMOPSkill, types.PPTXBackendJSSDKDesign} {
 		client := New(Options{})
-		client.rememberCapabilities([]byte(`{"pptx_jssdk_progressive":{"v2":true}}`))
+		client.rememberCapabilities([]byte(`{"pptx_jssdk_progressive":{"v2":true},"pptx_svg_design":{"v1":true}}`))
 		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: backend})
 		// No bridge is running, so the call cannot succeed — but it must fail
 		// on the connection, not on a policy that refuses the backend itself.
-		if err == nil || strings.Contains(err.Error(), "已停用") {
+		if err == nil || strings.Contains(err.Error(), "已停用") || strings.Contains(err.Error(), "当前 OfficeCLI") {
 			t.Fatalf("backend %q was refused before reaching the bridge: %v", backend, err)
 		}
+	}
+}
+
+// svg-design is the default, and it only works against a bridge that streams
+// `slide.svg`. An older bridge is told to upgrade — by the default path and by
+// the explicit one alike — instead of being handed to another backend.
+func TestInvokeGenerateRejectsOldBridgeForSVGDesign(t *testing.T) {
+	for _, backend := range []string{"", types.PPTXBackendSVGDesign} {
+		client := New(Options{})
+		client.rememberCapabilities([]byte(`{"pptx_jssdk_progressive":{"v2":true},"document_generation":{"pptx":{}}}`))
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: backend})
+		if err == nil || err.Error() != svgDesignUnsupportedMessage {
+			t.Fatalf("backend %q on an old bridge: %v", backend, err)
+		}
+		if !strings.Contains(err.Error(), "pptx_svg_design.v1") || !strings.Contains(err.Error(), "更新") {
+			t.Fatalf("the refusal must name the missing capability and the fix: %v", err)
+		}
+	}
+}
+
+func TestBridgeRecognizesExactSVGDesignContract(t *testing.T) {
+	for _, raw := range []string{`{}`, `{"pptx_svg_design":{"v1":false}}`, `{"pptx_svg_design":{"v1":"true"}}`, `{"pptx_svg_design":true}`} {
+		if bridgeCapabilitiesFromPayload([]byte(raw)).svgDesignSupported {
+			t.Fatalf("accepted %s", raw)
+		}
+	}
+	if !bridgeCapabilitiesFromPayload([]byte(`{"pptx_svg_design":{"v1":true,"contract":"svg-design/v1"}}`)).svgDesignSupported {
+		t.Fatal("missing current contract")
+	}
+}
+
+// A run that names another backend is none of this check's business.
+func TestInvokeGenerateDoesNotDemandSVGDesignForOtherBackends(t *testing.T) {
+	client := New(Options{})
+	client.rememberCapabilities([]byte(`{"document_generation":{"pptx":{}}}`))
+	_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: types.PPTXBackendMOPSkill})
+	if err == nil || strings.Contains(err.Error(), "pptx_svg_design") {
+		t.Fatalf("mop-skill run blocked by the svg-design check: %v", err)
 	}
 }
 

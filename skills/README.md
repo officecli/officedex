@@ -1,5 +1,18 @@
 # OfficeDex 内置 Skills
 
+## 默认 PPT 生成：svg-design（2026-10-13 起）
+
+桌面端默认 PPT backend 是 `svg-design`，合同 `svg-design/v1`：模型逐页写受约束 SVG，OfficeCLI 逐页质检（svg-lint，出画布 / 超出卡片 / 文字重叠 / 被遮挡 / 数字单位拆行 / 孤字），不合格只回喂该页重写、最多 2 轮，仍不合格的页由自由构图 drawer 兜底。通过的页以 `slide.svg` op 推到桌面，内嵌编辑器用和后端同一个编译器（presentation 的 `packages/svg-slide`，经 `window.__presentationSvgSlide` 暴露）画成原生对象并保存。
+
+- **Skill 不在本目录。** 提示词和合同嵌在 OfficeCLI 二进制里（`officecli-internal/internal/runtime/svg_design_skill/`：`SKILL.md` 是给模型的 SVG 规范，`registry.json` 是合同、重写轮数和软规则）。改它之后重建 OfficeCLI 即可，没有同步脚本，桌面打包也不需要复制 Skill 文件。调试时可用 `OFFICECLI_SVG_DESIGN_SKILL_DIR` 指向一个目录覆盖。
+- **编译器随两处走。** 内嵌编辑器 bundle（`public/presentation`，`npm run build:presentation:desktop` 重建）带着它做实时绘制和「重新设计这页」；打包的 presentation runtime（`npm run stage:presentation`）把 `tools/execute-svg.mjs`、`tools/svg-lint.mjs` 及其依赖放进 `build/presentation`，编译器以 `dist-ssr/svg-slide.js` 的形式随 dist-ssr 一起构建和混淆。`build/presentation/runtime.json` 的 `svgDesign` 记录这棵树能不能跑：`staged` 为 false 表示 presentation checkout 太旧，`compiler` 为 false 表示 dist-ssr 没带编译器。
+- **打包版没有浏览器，这条路径不需要。** 有 Playwright 的开发环境里，lint 用编辑器的 text-measurement 实测字宽，编译后还会渲染并逐页做 SVG vs MOP 像素比对；打包版自动退到确定性估宽，跳过渲染和比对，照常编译、导出 PPTX、严格回导。`runtime.json` 的 `svgDesign.measurement` 写明是哪一种。
+- **能力闸门。** 桥接必须声明 `pptx_svg_design.v1=true`。缺少它的旧 OfficeCLI 会被桌面端直接拒绝并提示更新（`internal/bridge/client.go` 的 `svgDesignUnsupportedMessage`），不会静默换成别的 backend。内嵌编辑器缺编译器时，重放以 `SVG_SLIDE_UNSUPPORTED` 失败，提示重建编辑器 bundle。
+- **编辑。** 改字、改色等小改仍走 `pptxEditRun`（模型写 Office.js）。「重新设计这页 / 换个版式」以及对已生成 deck 的增量重做（「重做第 3 到 5 页」「从第 6 页开始重做」「整套换成深色」）走 SVG 往返，一页一次（`src/canvas/pptxRedesignRun.ts`）：导出当前页为带 `data-mop-id` 的 SVG → `pptx/plan-js` 的 `svg-redesign` 模式返回改过的 SVG → 编辑器内 lint → 按 id 差异写回。超过 3 页先确认；某页反复通不过版面检查就保持原样并在结果里点名，其余页照常写回。
+- **配图与大纲确认。** 配图沿用既有图片管线：图片落到资产池，页面用 `<image>` 引用，`slide.svg` op 的 `assets` 按 digest 取图，图片进度事件不变。高级模式的大纲确认闸门照常生效，在模型开始画页之前暂停。
+
+`mop-skill`、`aippt-jssdk-design` 仍可通过显式 `pptxBackend` 选用；下面的内容描述的是这些旧路径的 Skill。
+
 PPT 静态构图统一由 [aippt-jssdk-design](aippt-jssdk-design/SKILL.md) 提供，合同 `jssdk-progressive/v2`；独立动画入口在其上增加运动编排与验证。用户指定的来源门槛为 **原始 SSIM > 0.95**，同时校验执行、原生结构、零溢出、导出/严格回导和文件哈希；不再要求旧 0.999 验收布尔值通过。
 
 当前 9 个 JSSDK 来源全部纳入，支持并列、列表、时间轴共 9 种变体。来源级别为 `high_similarity_verified`；原始 `exactSolution=false` 保留，衍生配方维持实验状态。其他五个家族仍是草案，不能当作已有来源覆盖。

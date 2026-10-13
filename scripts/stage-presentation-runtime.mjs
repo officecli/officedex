@@ -87,6 +87,16 @@ export const PRESENTATION_SOURCES = Object.freeze([
   { from: "tools/lib/jssdk-video-authoring.mjs", required: true },
   { from: "tools/lib/mop-converter-client.mjs", required: true },
   { from: "tools/lib/jssdk-native-browser.ts", required: true },
+  // The svg-design backend's tools: svg-lint checks each page the model
+  // writes, execute-svg compiles the accepted pages to MOP and PPTX. Unlike
+  // the JSSDK Host runner they run without a browser: in this tree they load
+  // the compiler from dist-ssr (tools/lib/svg-slide-host.mjs falls back to it
+  // when playwright or the sources are absent). `required: false` keeps an
+  // older presentation checkout stageable; runtime.json records the result.
+  { from: "tools/execute-svg.mjs", required: false },
+  { from: "tools/svg-lint.mjs", required: false },
+  { from: "tools/lib/svg-slide-host.mjs", required: false },
+  { from: "tools/lib/svg-slide-runtime.mjs", required: false },
 ]);
 
 // Dev-only payloads inside the staged packages. reference-cache alone is ~107MB
@@ -270,6 +280,9 @@ export async function findNativeModules(dir) {
 /** The entry points officecli spawns or loads from the staged tree. */
 const RUNNER_ENTRIES = Object.freeze(["tools/execute-jssdk.mjs"]);
 
+/** The svg-design backend's entry points; staged only when the checkout has them. */
+const SVG_DESIGN_ENTRIES = Object.freeze(["tools/execute-svg.mjs", "tools/svg-lint.mjs"]);
+
 /**
  * Every relative import reachable from the runner must exist in the staged tree.
  *
@@ -285,6 +298,17 @@ const RUNNER_ENTRIES = Object.freeze(["tools/execute-jssdk.mjs"]);
  * cannot be resolved without running Vite — `jssdk-native-browser.ts` is listed
  * explicitly above for exactly that reason.
  */
+/** Whether the staged dist-ssr bundles the given source entry point. */
+async function ssrBundleHas(dest, entry) {
+  try {
+    const manifest = JSON.parse(await readFile(path.join(dest, "dist-ssr", "manifest.json"), "utf8"));
+    const name = manifest.entryPoints?.[entry];
+    return Boolean(name) && existsSync(path.join(dest, "dist-ssr", `${name}.js`));
+  } catch {
+    return false;
+  }
+}
+
 export async function assertRunnerClosure(dest, entries = RUNNER_ENTRIES) {
   const seen = new Set();
   const queue = [...entries];
@@ -486,6 +510,16 @@ export async function stagePresentationRuntime({
    */
   const playwrightStaged = existsSync(path.join(modules, "playwright"));
 
+  // The SVG tools are optional in the source list, so their closure is checked
+  // here once they are known to be present: either all of it is staged or the
+  // build stops, the same rule the JSSDK runner is held to.
+  const svgStaged = SVG_DESIGN_ENTRIES.every((entry) => existsSync(path.join(dest, entry)));
+  const svgDesign = {
+    staged: svgStaged,
+    closure: svgStaged ? await assertRunnerClosure(dest, SVG_DESIGN_ENTRIES) : [],
+    compiler: svgStaged && (await ssrBundleHas(dest, "packages/svg-slide/src/index.ts")),
+  };
+
   await writeFile(
     path.join(dest, "runtime.json"),
     JSON.stringify(
@@ -503,6 +537,18 @@ export async function stagePresentationRuntime({
           closure: runnerClosure,
           // false means the jssdk-design backend cannot run from this tree.
           playwright: playwrightStaged,
+        },
+        // What the svg-design backend runs from this tree. `staged: false`
+        // means the presentation checkout predates the SVG tools; `compiler`
+        // false means dist-ssr was built without the svg-slide bundle, and the
+        // backend would fail at its first lint.
+        svgDesign: {
+          staged: svgDesign.staged,
+          entries: svgDesign.staged ? SVG_DESIGN_ENTRIES : [],
+          closure: svgDesign.closure,
+          compiler: svgDesign.compiler,
+          // Text is measured in a browser when one is staged, estimated otherwise.
+          measurement: playwrightStaged ? "browser" : "estimate",
         },
         nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
       },
