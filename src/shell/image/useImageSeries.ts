@@ -68,6 +68,11 @@ export interface ImageSeries {
   batches: ImageBatch[];
   /** What "Try again" would ask for again. */
   lastPrompt: string;
+  /**
+   * The picture "Try again" starts from: the version the failed run was
+   * changing, when it was changing one and that version is still here.
+   */
+  retryBaseFileId: string | null;
 }
 
 const EMPTY: ImageSeries = {
@@ -79,6 +84,7 @@ const EMPTY: ImageSeries = {
   failure: null,
   batches: [],
   lastPrompt: "",
+  retryBaseFileId: null,
 };
 
 function batchStatus(runs: readonly AgentImageRun[]): ImageBatch["status"] {
@@ -174,10 +180,12 @@ export function deriveImageSeries(
       failure: null,
       batches,
       lastPrompt: runs[runs.length - 1]?.prompt ?? "",
+      retryBaseFileId: null,
     };
   }
 
   const last = runs[runs.length - 1];
+  const failure = last && (last.status === "failed" || last.status === "cancelled") ? last : null;
   return {
     isImageTask: Boolean(isImageTask),
     runs,
@@ -187,9 +195,12 @@ export function deriveImageSeries(
       seriesVersions[seriesVersions.length - 1] ??
       null,
     busy: runs.some((run) => run.status === "running"),
-    failure: last && (last.status === "failed" || last.status === "cancelled") ? last : null,
+    failure,
     batches,
     lastPrompt: last?.prompt ?? "",
+    retryBaseFileId: failure?.baseTaskId
+      ? (seriesVersions.find((version) => version.run?.taskId === failure.baseTaskId)?.file.id ?? null)
+      : null,
   };
 }
 

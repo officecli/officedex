@@ -208,7 +208,7 @@ export function ImageWorkspace({ agent }: { agent: ReturnType<typeof useAgentTas
             <button
               type="button"
               className="shell-image-message-button"
-              onClick={() => void retryImageRun(agent, agent.task, series.lastPrompt)}
+              onClick={() => void retryImageRun(agent, agent.task, series.lastPrompt, series.retryBaseFileId)}
             >
               <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
               {t("shell.imageWs.tryAgain")}

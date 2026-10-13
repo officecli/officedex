@@ -109,6 +109,29 @@ describe("an image task read as versions", () => {
     expect(recovered.failure).toBeNull();
   });
 
+  /*
+   * A failed change is retried against the picture it was changing. Without
+   * the base, "Try again" on "make it green" draws an unrelated picture.
+   */
+  it("names the version a failed change started from, for Try again", () => {
+    const failedChange = deriveImageSeries(
+      imageTask([run({ taskId: "r1" }), run({ taskId: "r2", status: "failed", prompt: "Make it green", baseTaskId: "r1" })]),
+      [file("f1", "r1")],
+      null,
+    );
+    expect(failedChange.retryBaseFileId).toBe("f1");
+
+    const failedFirst = deriveImageSeries(imageTask([run({ taskId: "r1", status: "failed" })]), [], null);
+    expect(failedFirst.retryBaseFileId).toBeNull();
+
+    const baseGone = deriveImageSeries(
+      imageTask([run({ taskId: "r1" }), run({ taskId: "r2", status: "failed", baseTaskId: "r1" })]),
+      [],
+      null,
+    );
+    expect(baseGone.retryBaseFileId).toBeNull();
+  });
+
   /* "Make me four" is four runs and one thing the user said. */
   it("folds a batch of identical prompts into one message", () => {
     const series = deriveImageSeries(
