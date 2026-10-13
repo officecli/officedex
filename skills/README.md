@@ -8,7 +8,8 @@
 - **编译器随两处走。** 内嵌编辑器 bundle（`public/presentation`，`npm run build:presentation:desktop` 重建）带着它做实时绘制和「重新设计这页」；打包的 presentation runtime（`npm run stage:presentation`）把 `tools/execute-svg.mjs`、`tools/svg-lint.mjs` 及其依赖放进 `build/presentation`，编译器以 `dist-ssr/svg-slide.js` 的形式随 dist-ssr 一起构建和混淆。`build/presentation/runtime.json` 的 `svgDesign` 记录这棵树能不能跑：`staged` 为 false 表示 presentation checkout 太旧，`compiler` 为 false 表示 dist-ssr 没带编译器。
 - **打包版没有浏览器，这条路径不需要。** 有 Playwright 的开发环境里，lint 用编辑器的 text-measurement 实测字宽，编译后还会渲染并逐页做 SVG vs MOP 像素比对；打包版自动退到确定性估宽，跳过渲染和比对，照常编译、导出 PPTX、严格回导。`runtime.json` 的 `svgDesign.measurement` 写明是哪一种。
 - **能力闸门。** 桥接必须声明 `pptx_svg_design.v1=true`。缺少它的旧 OfficeCLI 会被桌面端直接拒绝并提示更新（`internal/bridge/client.go` 的 `svgDesignUnsupportedMessage`），不会静默换成别的 backend。内嵌编辑器缺编译器时，重放以 `SVG_SLIDE_UNSUPPORTED` 失败，提示重建编辑器 bundle。
-- **编辑。** 改字、改色等小改仍走 `pptxEditRun`（模型写 Office.js）。「重新设计这页 / 换个版式」走 SVG 往返（`src/canvas/pptxRedesignRun.ts`）：导出当前页为带 `data-mop-id` 的 SVG → `pptx/plan-js` 的 `svg-redesign` 模式返回改过的 SVG → 编辑器内 lint → 按 id 差异写回。
+- **编辑。** 改字、改色等小改仍走 `pptxEditRun`（模型写 Office.js）。「重新设计这页 / 换个版式」以及对已生成 deck 的增量重做（「重做第 3 到 5 页」「从第 6 页开始重做」「整套换成深色」）走 SVG 往返，一页一次（`src/canvas/pptxRedesignRun.ts`）：导出当前页为带 `data-mop-id` 的 SVG → `pptx/plan-js` 的 `svg-redesign` 模式返回改过的 SVG → 编辑器内 lint → 按 id 差异写回。超过 3 页先确认；某页反复通不过版面检查就保持原样并在结果里点名，其余页照常写回。
+- **配图与大纲确认。** 配图沿用既有图片管线：图片落到资产池，页面用 `<image>` 引用，`slide.svg` op 的 `assets` 按 digest 取图，图片进度事件不变。高级模式的大纲确认闸门照常生效，在模型开始画页之前暂停。
 
 `mop-skill`、`aippt-jssdk-design` 仍可通过显式 `pptxBackend` 选用；下面的内容描述的是这些旧路径的 Skill。
 
