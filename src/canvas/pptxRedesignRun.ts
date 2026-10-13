@@ -29,34 +29,85 @@ const MAX_LINT_ROUNDS = 2;
 const SOFT_RULES = new Set(["text.orphan", "text.number-unit-split"]);
 
 const REDESIGN_INTENT =
-  /重新设计|重新排版|重做(?:这|本|当前)?(?:一)?页|换(?:个|一个|一种|成)?[^，。,.]{0,8}(?:版式|布局|排版)|改成[^，。,.]{0,10}(?:版式|布局|时间线|对比|卡片)|redesign|re-?layout|new layout|restyle this slide/iu;
+  /重新设计|重新排版|重新生成|重做|重画|换(?:个|一个|一种|成)?[^，。,.]{0,8}(?:版式|布局|排版|风格)|改成[^，。,.]{0,10}(?:版式|布局|时间线|对比|卡片)|redesign|redo|regenerate|re-?layout|new layout|restyle/iu;
 
 /** Whether an instruction asks for the page to be laid out afresh. */
 export function isRedesignInstruction(instruction: string): boolean {
   return REDESIGN_INTENT.test(instruction);
 }
 
+export interface RedesignTarget {
+  id: string;
+  position: number;
+}
+
+/** More pages than this in one instruction are asked about before starting. */
+export const REDESIGN_CONFIRM_ABOVE = 3;
+
 /**
- * The one slide a redesign applies to: the page named in the instruction,
- * else the single selected slide. More than one, or none, is not a redesign
- * this path takes.
+ * The slides a redo applies to, in deck order.
+ *
+ * This is the incremental redo of a finished deck: "redo slides 3 to 5",
+ * "everything from page 6 on", "the whole deck in a darker style". Each
+ * target goes through the same per-slide round trip, so a deck is redone a
+ * page at a time and an unchanged page is never touched.
+ *
+ * Read from the instruction first — a range, a "from N on", a list, "all" —
+ * and from the selection otherwise. Nothing named and nothing selected is not
+ * a redo this path takes.
  */
+export function redesignTargetSlides(
+  context: PresentationEditorContext,
+  instruction: string,
+): RedesignTarget[] {
+  const slides = context.slides ?? [];
+  const at = (position: number): RedesignTarget[] =>
+    slides[position] ? [{ id: slides[position].id, position }] : [];
+  const span = (from: number, to: number): RedesignTarget[] => {
+    const targets: RedesignTarget[] = [];
+    for (let position = Math.max(0, from); position <= Math.min(slides.length - 1, to); position += 1) {
+      targets.push(...at(position));
+    }
+    return targets;
+  };
+  const range =
+    /第?\s*(\d{1,3})\s*(?:页|张)?\s*(?:到|至|-|–|—|~|～)\s*第?\s*(\d{1,3})\s*[页张]/u.exec(instruction) ??
+    /(?:slides?|pages?)\s*(\d{1,3})\s*(?:to|through|-|–)\s*(\d{1,3})/iu.exec(instruction);
+  if (range) return span(Number(range[1]) - 1, Number(range[2]) - 1);
+  const onward =
+    /(?:从)?第\s*(\d{1,3})\s*[页张]\s*(?:开始|起|之后|以后|往后|及之后|及以后)/u.exec(instruction) ??
+    /from\s+(?:slide|page)\s*(\d{1,3})\s*(?:on|onward|onwards)/iu.exec(instruction);
+  if (onward) {
+    // "第 6 页之后" starts after it; "从第 6 页开始" starts at it.
+    const after = /之后|以后|往后/u.test(onward[0]) && !/及/u.test(onward[0]);
+    return span(Number(onward[1]) - 1 + (after ? 1 : 0), slides.length - 1);
+  }
+  const listed = [...instruction.matchAll(/第\s*((?:\d{1,3}\s*[、,，和]\s*)*\d{1,3})\s*[页张]/gu)]
+    .flatMap((match) => match[1].split(/[、,，和]/u))
+    .concat([...instruction.matchAll(/(?:slide|page)\s*(\d{1,3})/giu)].map((match) => match[1]))
+    .map((value) => Number(value.trim()) - 1)
+    .filter((position) => Number.isInteger(position));
+  if (listed.length > 0) {
+    return [...new Set(listed)].sort((a, b) => a - b).flatMap(at);
+  }
+  if (/整套|全部|所有页|每一页|每页|整个(?:演示|PPT|文稿)|whole deck|every slide|all slides/iu.test(instruction)) {
+    return span(0, slides.length - 1);
+  }
+  if (context.selectedSlideIds.length > 0) {
+    return slides
+      .map((slide, position) => ({ id: slide.id, position }))
+      .filter((target) => context.selectedSlideIds.includes(target.id));
+  }
+  return slides.length === 1 ? at(0) : [];
+}
+
+/** The single target of a one-slide redesign, or null. */
 export function redesignTargetSlide(
   context: PresentationEditorContext,
   instruction: string,
-): { id: string; position: number } | null {
-  const slides = context.slides ?? [];
-  const named = /第\s*(\d{1,3})\s*[页张]|(?:slide|page)\s*(\d{1,3})/iu.exec(instruction);
-  if (named) {
-    const position = Number(named[1] ?? named[2]) - 1;
-    const slide = slides[position];
-    return slide ? { id: slide.id, position } : null;
-  }
-  if (context.selectedSlideIds.length === 1) {
-    const position = slides.findIndex((slide) => slide.id === context.selectedSlideIds[0]);
-    return position >= 0 ? { id: slides[position].id, position } : null;
-  }
-  return slides.length === 1 ? { id: slides[0].id, position: 0 } : null;
+): RedesignTarget | null {
+  const targets = redesignTargetSlides(context, instruction);
+  return targets.length === 1 ? targets[0] : null;
 }
 
 interface LintDiagnostic {
@@ -216,4 +267,70 @@ export async function redesignSlide(
     saveError,
     undo: null,
   };
+}
+
+/**
+ * Redoes several slides, one round trip each, in deck order.
+ *
+ * A page that fails its layout check is left as it was and the run goes on:
+ * four good pages are not thrown away for a fifth that would not settle. The
+ * result says how many changed and names the ones that did not.
+ */
+export async function redesignSlides(
+  deps: PptxRedesignDeps,
+  request: DocumentEditRequest,
+  targets: readonly RedesignTarget[],
+  assertLive: () => void,
+  plan: <T>(work: Promise<T>) => Promise<T>,
+): Promise<DocumentEditResult | null> {
+  if (targets.length === 1) return redesignSlide(deps, request, targets[0], assertLive, plan);
+  if (targets.length > REDESIGN_CONFIRM_ABOVE || request.requireReview) {
+    const ask = request.onConfirm;
+    if (!ask) throw new Error(translate("shell.edit.notConfident"));
+    const approved = await ask({
+      text: translate("shell.edit.redesignManyConfirm", {
+        count: targets.length,
+        slides: targets.map((target) => target.position + 1).join(", "),
+      }),
+    });
+    assertLive();
+    if (!approved) {
+      return { summary: translate("shell.edit.deckCancelled"), applied: 0, scope: "selection", undo: null, saveError: null };
+    }
+  }
+  let applied = 0;
+  let saveError: string | null = null;
+  const failed: number[] = [];
+  // Each page saves itself; asking again per page would be a confirmation
+  // the user already gave.
+  const each: DocumentEditRequest = { ...request, requireReview: false };
+  for (const target of targets) {
+    assertLive();
+    try {
+      const result = await redesignSlide(deps, each, target, assertLive, plan);
+      // The editor build has no SVG surface: nothing here can work.
+      if (result === null) return applied > 0 ? summarise() : null;
+      applied += result.applied;
+      saveError = result.saveError ?? saveError;
+    } catch (error) {
+      if (error instanceof Error && error.name === "EditAborted") throw error;
+      failed.push(target.position + 1);
+      logShellEvent("pptx-redesign.slide-failed", {
+        slide: target.position + 1,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  if (applied === 0 && failed.length > 0) {
+    throw new Error(translate("shell.edit.redesignRejected", { reason: "" }).trim());
+  }
+  return summarise();
+
+  function summarise(): DocumentEditResult {
+    const summary =
+      failed.length > 0
+        ? translate("shell.edit.slidesRedesignedPartly", { count: applied, failed: failed.join(", ") })
+        : translate("shell.edit.slidesRedesigned", { count: applied });
+    return { summary, applied, scope: targets.length === 1 ? "selection" : "document", saveError, undo: null };
+  }
 }

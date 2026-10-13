@@ -4,7 +4,7 @@ import type { DesktopAPI, PlanPptxJSResult } from "../shared/types";
 import type { PresentationEditorContext } from "../shared/presentationInspect";
 import type { PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { createPptxEditRunner } from "./pptxEditRun";
-import { isRedesignInstruction, redesignTargetSlide } from "./pptxRedesignRun";
+import { isRedesignInstruction, redesignTargetSlide, redesignTargetSlides } from "./pptxRedesignRun";
 
 const EXPORTED = '<svg viewBox="0 0 1280 720"><text data-mop-id="t1" x="80" y="120">标题</text></svg>';
 const EDITED = '<svg viewBox="0 0 1280 720"><text data-mop-id="t1" x="200" y="120">标题</text></svg>';
@@ -81,6 +81,58 @@ describe("redesign intent", () => {
     expect(redesignTargetSlide({ ...deck, selectedSlideIds: [] }, "重新设计这页")).toBeNull();
     expect(redesignTargetSlide({ ...deck, selectedSlideIds: ["s1", "s2"] }, "重新设计这页")).toBeNull();
     expect(redesignTargetSlide(deck, "重新设计第 9 页")).toBeNull();
+  });
+});
+
+describe("incremental redo of a finished deck", () => {
+  const positions = (instruction: string, selected: string[] = []) =>
+    redesignTargetSlides({ ...deck, selectedSlideIds: selected }, instruction).map((target) => target.position + 1);
+
+  it("reads a range, a list, a tail and the whole deck from the instruction", () => {
+    expect(positions("重做第 2 到 3 页")).toEqual([2, 3]);
+    expect(positions("redo slides 1-2")).toEqual([1, 2]);
+    expect(positions("第 1、3 页重新设计")).toEqual([1, 3]);
+    expect(positions("从第 2 页开始重做")).toEqual([2, 3]);
+    expect(positions("第 2 页之后都重做")).toEqual([3]);
+    expect(positions("整套重新设计成深色")).toEqual([1, 2, 3]);
+    expect(positions("重做这几页", ["s3", "s1"])).toEqual([1, 3]);
+    expect(positions("重做第 2 到 9 页")).toEqual([2, 3]);
+    expect(positions("重做")).toEqual([]);
+  });
+
+  it("redoes each named slide in its own round trip and reports the count", async () => {
+    const { controller, scripts } = editor();
+    const { api, planPptxJS } = planner([{ source: EDITED }, { source: EDITED }]);
+    const result = await createPptxEditRunner({ api, controller })(ask("重做第 2 到 3 页"));
+    expect(planPptxJS).toHaveBeenCalledTimes(2);
+    const exported = scripts.filter((source) => source.includes("exportSlide"));
+    expect(exported[0]).toContain("exportSlide(2)");
+    expect(exported[1]).toContain("exportSlide(3)");
+    expect(scripts.filter((source) => source.includes("importSlide"))).toHaveLength(2);
+    expect(result).toMatchObject({ applied: 2, scope: "document", saveError: null });
+  });
+
+  it("keeps the pages that passed when one will not settle", async () => {
+    const overlap = { severity: "error", rule: "text.overlap", message: "两段文字互相重叠。" };
+    const { controller, scripts } = editor({ lint: [[overlap], [overlap], [overlap], []] });
+    const { api } = planner([{ source: EDITED }, { source: EDITED }, { source: EDITED }, { source: EDITED }]);
+    const result = await createPptxEditRunner({ api, controller })(ask("重做第 2 到 3 页"));
+    expect(scripts.filter((source) => source.includes("importSlide"))).toHaveLength(1);
+    expect(result.applied).toBe(1);
+    expect(result.summary).toContain("2");
+  });
+
+  it("asks before redoing many slides, and does nothing on a no", async () => {
+    const { controller, scripts } = editor();
+    const { api, planPptxJS } = planner([]);
+    const onConfirm = vi.fn(async () => false);
+    const four = { ...deck, slides: [...(deck.slides ?? []), { id: "s4", index: 3, shapes: [] }] };
+    (controller.inspect as ReturnType<typeof vi.fn>).mockResolvedValue(four);
+    const result = await createPptxEditRunner({ api, controller })({ ...ask("整套重新设计"), onConfirm });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(planPptxJS).not.toHaveBeenCalled();
+    expect(scripts.some((source) => source.includes("importSlide"))).toBe(false);
+    expect(result.applied).toBe(0);
   });
 });
 
