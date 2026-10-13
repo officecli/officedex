@@ -467,7 +467,7 @@ function outlineGateTask(): AgentTask {
     question: {
       id: "plan-outline-gate",
       text: "The outline is ready.",
-      options: [{ id: "approve", label: "Start drawing", recommended: true }],
+      options: [{ id: "approve", label: "Start generating", recommended: true }],
       allowFreeform: false,
     },
   };

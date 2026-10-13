@@ -373,11 +373,23 @@ export interface TaskQuestionAnswer {
   questionIndex?: number;
 }
 
+/** The deck brief a `pptx_brief` question carries, as far as it could be read. */
+export interface TaskQuestionBrief {
+  audience?: string;
+  scenario?: string;
+  pages?: number;
+  style?: string;
+  density?: string;
+  language?: string;
+}
+
 export interface TaskQuestion {
   id: string;
   question: string;
   /** Runtime-declared kind for questions with a dedicated UI, e.g. "pptx_outline_gate". */
   kind?: string;
+  /** What a `pptx_brief` question is asking the user to confirm: the brief the runtime inferred. */
+  brief?: TaskQuestionBrief;
   options: Array<TaskQuestionOption>;
   allowFreeform: boolean;
   questions?: Array<{

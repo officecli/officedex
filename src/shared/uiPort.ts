@@ -236,12 +236,22 @@ export interface AgentQuestion {
    * editable outline for it rather than a plain question card.
    */
   kind?: "pptx_outline_gate" | string;
+  /**
+   * What exactly is being confirmed, as label and value pairs.
+   *
+   * A confirmation with nothing to read is not one: the deck brief used to
+   * arrive as a sentence and a Start button (UX30-05). Absent for a question
+   * that is its own content.
+   */
+  details?: Array<{ label: string; value: string }>;
   options: AgentQuestionOption[];
   /** The runtime accepts typed text as well as one of the options. */
   allowFreeform: boolean;
 }
 
 export const OUTLINE_GATE_KIND = "pptx_outline_gate";
+/** The deck brief the runtime inferred, put to the user before the outline is drafted. */
+export const BRIEF_KIND = "pptx_brief";
 
 /**
  * One page of a deck being written, as the task panel lists it.
@@ -270,7 +280,12 @@ export interface AgentOutlinePage {
  * conversation has to tell those apart: they offer different ways forward
  * (Retry, Resume, Open) and only one of them is a success.
  */
-export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted";
+/**
+ * `rejected` is a decision, not an interruption: the user turned a proposed
+ * change down in Review and the original file is as it was. It is kept apart
+ * from `stopped` because nothing is left to continue (UX30-02).
+ */
+export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted" | "rejected";
 
 export interface AgentTask {
   /** Worker artifact, independent of whether the current library page lists it. */
@@ -313,6 +328,13 @@ export interface AgentTask {
    * show — so consumers can treat them alike.
    */
   outline?: AgentOutlinePage[];
+  /**
+   * The input file this run was pointed at, when the request named one.
+   *
+   * What "Choose another file" replaces: the card shows the old name beside
+   * the new one, and can tell when the file picked is the same unreadable one.
+   */
+  inputFile?: { name: string; fileId?: string; path?: string };
   suggestion: AgentSuggestion | null;
   /** Set while the run is waiting for an answer; null the rest of the time. */
   question: AgentQuestion | null;
@@ -396,7 +418,17 @@ export type AgentEvent =
    * this one. Lists and artifact handling want every run; the panel wants only
    * the focused ones. Absent means the port does not distinguish.
    */
-  | { kind: "task"; task: AgentTask; focused?: boolean }
+  | {
+      kind: "task";
+      task: AgentTask;
+      focused?: boolean;
+      /**
+       * The file whose bytes on disk this event just replaced — an applied
+       * suggestion, or one taken back. An editor holding that file is showing
+       * what it loaded, not what is there now, and has to be rebuilt (UX30-01).
+       */
+      fileChanged?: string;
+    }
   /** The folder's panel was reset to an empty, new conversation. */
   | { kind: "cleared"; folderId: string }
   | { kind: "error"; message: string }
@@ -424,6 +456,9 @@ export interface Attachment {
   /** Set for an uploaded folder; the shell shows the count. */
   fileCount?: number;
 }
+
+/** The file a failed request should be retried with: one from the library, or one on disk. */
+export type InputFileReplacement = { fileId: string } | { path: string; name: string };
 
 export interface SendInput {
   pptxTemplate?: { id: string; version: number; localAssetDir: string };
@@ -619,6 +654,13 @@ export interface AgentPort {
    */
   finish(taskId?: string): Promise<void>;
   retry?(taskId: string): Promise<void>;
+  /**
+   * Runs a failed request again with its unreadable input file swapped for
+   * another one (UX30-03). The request itself — its words, its mode, its
+   * conversation — is the original's; only the file changes, and the run is
+   * the next attempt of the same task rather than a new message.
+   */
+  retryWithFile?(taskId: string, replacement: InputFileReplacement): Promise<void>;
   moveConversation?(conversationId: string, folderId: string): Promise<void>;
   retryBatch?(taskId: string): Promise<void>;
   sendQueued?(taskId: string): Promise<void>;

@@ -311,3 +311,102 @@
   -webkit-user-select: none !important;
   user-select: none !important;
 }
+
+/*
+ * "Retry with another file" (UX30-03): the request as typed, kept to a few
+ * lines, and the unreadable file struck through beside its replacement.
+ */
+.dx-replace-request {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.dx-replace-old {
+  color: var(--dx-muted);
+  text-decoration: line-through;
+}
+
+/*
+ * A run's failure in Details (UX30-08). The runtime's text is one long line
+ * and often one long token; it wraps anywhere and scrolls inside the dialog
+ * instead of being cut off at its edge.
+ */
+.dx-modal-body pre.dx-error {
+  margin: 8px 0;
+  padding: 8px;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font: inherit;
+  font-size: var(--dx-fs-13);
+  line-height: 20px;
+  background: var(--dx-canvas);
+  border-radius: 6px;
+}
+.dx-run-error > p {
+  overflow-wrap: anywhere;
+}
+.dx-run-error summary {
+  cursor: pointer;
+  color: var(--dx-muted);
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+}
+
+/* What a confirmation is about (UX30-05): each brief row keeps its label beside its value. */
+.dx-agent-question-details {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+}
+.dx-agent-question-details > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+}
+
+/*
+ * Settings selects (UX30-09). 36px tall with the interface type (14/20/400);
+ * `appearance: none` is what makes WebKit honour the height at all. The focus
+ * ring is the base `select:focus` rule's; the chevron is the Local sort's icon.
+ */
+.dx-setting-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: 220px;
+}
+#shell .dx-setting-select select {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 132px;
+  max-width: 220px;
+  height: 36px;
+  min-height: 36px;
+  padding: 7px 32px 7px 12px;
+  font: var(--dx-type-ui);
+  color: var(--dx-text);
+  cursor: pointer;
+}
+#shell .dx-setting-select select:disabled {
+  cursor: default;
+  color: var(--dx-muted);
+}
+.dx-setting-select > .dx-icon {
+  position: absolute;
+  right: 10px;
+  top: 11px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  color: var(--dx-muted);
+}

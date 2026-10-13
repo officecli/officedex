@@ -19,6 +19,7 @@ export type RunState =
   | "review"
   | "complete"
   | "stopped"
+  | "rejected"
   | "failed"
   | "partial"
   | "offline";
@@ -56,6 +57,8 @@ export function runStateOf(task: AgentTask | null): RunState | null {
           return "failed";
         case "stopped":
           return "stopped";
+        case "rejected":
+          return "rejected";
         case "partial":
           return "partial";
         case "interrupted":
@@ -80,6 +83,7 @@ export const RUN_TITLE_KEY: Record<RunState, string> = {
   review: "dx.run.review",
   complete: "dx.run.complete",
   stopped: "dx.run.stopped",
+  rejected: "dx.run.rejected",
   failed: "dx.run.failed",
   partial: "dx.run.partial",
   offline: "dx.run.offline",
@@ -96,6 +100,8 @@ export const RUN_DATA_STATUS: Record<RunState, string> = {
   review: "review",
   complete: "completed",
   stopped: "stopped",
+  // Drawn as a settled, neutral state: nothing went wrong and nothing is running.
+  rejected: "stopped",
   failed: "failed",
   partial: "partial",
   offline: "interrupted",

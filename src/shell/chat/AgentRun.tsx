@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useT } from "../../renderer/i18n";
 import type { Agent } from "../agent/AgentContext";
-import { contextRequests } from "../chrome/useFileActions";
 import { DexFace } from "../dex/DexFace";
 import { formatDateTime, formatElapsed } from "../kit/format";
 import { FileIcon, Icon, extensionOf, type IconName } from "../kit/Icon";
 import { closeModal, openModal } from "../kit/layers";
 import { useLibraryActions } from "../nav/useLibraryActions";
+import { usePort } from "../port/PortContext";
+import { openReplaceFile } from "./ReplaceFileDialog";
 import { OUTLINE_GATE_KIND, type AgentOutlinePage, type AgentStep, type AgentTask, type AgentSuggestion, type FileMeta } from "../../shared/uiPort";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
@@ -35,6 +36,7 @@ const STATUS_ICON: Record<RunState, IconName | "spinner"> = {
   review: "Clock3",
   complete: "CircleCheck",
   stopped: "Pause",
+  rejected: "CircleCheck",
   failed: "CircleHelp",
   partial: "CircleHelp",
   offline: "CircleHelp",
@@ -53,6 +55,9 @@ function summaryOf(state: RunState, task: AgentTask, artifact: FileMeta | null, 
       if (task.suggestion?.applied) return t("dx.run.summary.applied");
       if (artifact || task.artifact) return t("dx.run.summary.fileReady");
       return t("dx.run.summary.finished");
+    case "rejected":
+      // A decision the user made, said as one; never a leftover error line.
+      return t("dx.run.summary.rejected");
     case "failed":
     case "partial":
     case "offline":
@@ -102,6 +107,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
   const t = useT();
   const { files, dispatch } = useShell();
   const library = useLibraryActions();
+  const port = usePort();
   const settings = useComposerSettings();
   const state = runStateOf(task);
   const running = isRunning(state);
@@ -228,7 +234,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             <dt>{t("dx.run.files")}</dt>
             <dd>{[...new Set([task.targetFileName, artifact?.name, reviewTarget?.name, ...(task.batch?.map((item) => item.name) ?? [])].filter(Boolean))].join(", ") || t("dx.run.newResult")}</dd>
           </dl>
-          {task.errorDetail || task.error ? <pre className="dx-error">{task.errorDetail ?? task.error}</pre> : null}
+          {task.errorDetail || task.error ? <RunError summary={task.error} detail={task.errorDetail} /> : null}
           {task.batch?.filter(item => item.errorDetail).map(item => (
             <section key={item.fileId}>
               <strong>{item.name}</strong>
@@ -259,7 +265,9 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
   // A batch with unfinished items retries from the one action row below; the
   // results list used to draw a second, identically named button (UX28-14).
   const batchUnfinished = Boolean(task.batch?.some((item) => item.status !== "completed")) && !running;
-  const canRetry = state === "failed" || state === "partial" || state === "offline" || state === "stopped" || batchUnfinished;
+  // A rejected proposal has nothing to continue. Asking again is offered, as
+  // the new request it is (UX30-02).
+  const canRetry = state === "failed" || state === "partial" || state === "offline" || state === "stopped" || state === "rejected" || batchUnfinished;
   // The row is drawn only when it has something in it: an empty one still takes its gap.
   const hasActions =
     running || state === "queued" || canRetry || task.failureKind === "model" || Boolean(task.suggestion);
@@ -395,20 +403,29 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             className="dx-btn dx-primary"
             data-act="task-replace-file"
             data-id={task.id}
-            onClick={() => contextRequests.emit()}
+            onClick={() =>
+              openReplaceFile({
+                task,
+                // The words of this request: the user turn the run answers.
+                request: [...task.messages].reverse().find((message) => message.role === "user")?.text ?? "",
+                files,
+                pickFromDisk: port.pickAttachmentPaths,
+                onRetry: (replacement) => void agent.retryWithFile(task.id, replacement),
+              })
+            }
           >
             {t("dx.run.replaceFile")}
           </button>
         ) : canRetry ? (
           <button
             type="button"
-            className="dx-btn dx-primary"
+            className={state === "rejected" ? "dx-btn" : "dx-btn dx-primary"}
             disabled={otherTaskRunning}
             data-act="task-retry"
             data-id={task.id}
             onClick={() => (task.status === "paused" ? void agent.resume() : retry())}
           >
-            {t(state === "stopped" && !task.batch ? "dx.run.resume" : state === "partial" || task.recovery || batchUnfinished ? "dx.run.retryRemaining" : "dx.run.retry")}
+            {t(retryLabelKey(state, task, batchUnfinished))}
           </button>
         ) : null}
         {state === "offline" && !online ? (
@@ -457,6 +474,60 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       </button>
     </article>
   );
+}
+
+/**
+ * Why a run did not finish, in Details (UX30-08).
+ *
+ * The summary first, in the interface language, as a paragraph that wraps. The
+ * runtime's own text follows behind a disclosure: it is what support needs and
+ * it used to be the only thing shown, on one line that the dialog cut off
+ * before the part that mattered ("requested exactly 3 s…"). It wraps anywhere,
+ * scrolls inside the dialog when long, and can be copied whole.
+ */
+function RunError({ summary, detail }: { summary?: string; detail?: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  const technical = detail && detail !== summary ? detail : "";
+  return (
+    <section className="dx-run-error" data-run-error>
+      <p className="dx-error" role="alert">{summary || t("shell.agent.technicalFailure")}</p>
+      {technical ? (
+        <details>
+          <summary>{t("dx.run.technicalDetails")}</summary>
+          <pre className="dx-error">{technical}</pre>
+          <button
+            type="button"
+            className="dx-btn"
+            data-act="copy-error"
+            onClick={() =>
+              void navigator.clipboard?.writeText(technical).then(
+                () => setCopied(true),
+                () => setCopied(false),
+              )
+            }
+          >
+            {t(copied ? "dx.run.copiedDetails" : "dx.run.copyDetails")}
+          </button>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * What the one way forward is called.
+ *
+ * "Retry remaining" only where there is something kept to continue from; a
+ * deck that failed with no checkpoint is generated again, and says that rather
+ * than promising to pick up (UX30-06).
+ */
+export function retryLabelKey(state: RunState, task: AgentTask, batchUnfinished: boolean): string {
+  if (state === "rejected") return "dx.run.proposeAgain";
+  if (state === "stopped" && !task.batch) return "dx.run.resume";
+  if (state === "partial" || task.recovery || batchUnfinished) return "dx.run.retryRemaining";
+  if (state === "failed" && task.documentType === "pptx" && (task.outline?.length ?? 0) > 0) return "dx.run.regenerate";
+  return "dx.run.retry";
 }
 
 function recoveryNote(task: AgentTask, t: Translate): string {
@@ -659,6 +730,17 @@ function Question({ task, agent }: { task: AgentTask; agent: Agent }) {
   return (
     <form className="dx-agent-question" data-form="task-input" data-id={task.id} onSubmit={submit}>
       <label htmlFor={inputId}>{question.text || t("shell.task.questionFallback")}</label>
+      {question.details?.length ? (
+        // What is being confirmed, so the confirmation has something to read (UX30-05).
+        <dl className="dx-definition dx-agent-question-details" data-question-details>
+          {question.details.map((row) => (
+            <div key={row.label}>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       {question.options.length > 0 ? (
         <div className="dx-agent-answer-options" role="group" aria-label={t("dx.run.suggestedAnswers")}>
           {question.options.map((option) => (

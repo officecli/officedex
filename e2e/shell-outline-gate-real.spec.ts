@@ -105,7 +105,7 @@ test.describe("new shell · the outline gate, for real", () => {
     const renamed = "Renamed by the gate";
     await titles.nth(1).fill(renamed);
     // The gate's own approval: the submit button carries the runtime's label for
-    // it ("Start drawing"), and nothing is sent until it is pressed.
+    // it ("Start generating"), and nothing is sent until it is pressed.
     await gate.locator("button[type=submit]").click();
 
     // The card goes away because the run took the answer, not because it broke.

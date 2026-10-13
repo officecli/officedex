@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeEvent, DesktopAPI, DocumentRecord, GenerateInput, ModifyInput } from "../shared/types";
 import type { AgentEvent, AgentTask, SendInput } from "../shared/uiPort";
-import { createAgentService, referencedFileIds, requestsFormatChoice, reviewRequestedBy } from "./agent";
+import { createAgentService, inputFileOf, referencedFileIds, replaceInputFile, requestsFormatChoice, reviewRequestedBy } from "./agent";
 
 interface Scripted {
   api: DesktopAPI;
@@ -709,7 +709,8 @@ describe("1.0.18 acceptance regressions", () => {
     expect(panel.last()?.suggestion?.applied).toBe(false);
     await service.rejectSuggestion!("task-1");
     expect(panel.last()?.suggestion).toBeNull();
-    expect(panel.last()?.outcome).toBe("stopped");
+    // A decision, not an interruption: nothing is left to continue (UX30-02).
+    expect(panel.last()?.outcome).toBe("rejected");
     await expect(service.applySuggestion("task-1")).rejects.toThrow();
     expect(apply).not.toHaveBeenCalled();
   });
@@ -1013,5 +1014,159 @@ describe("template generation entry", () => {
       templateId: "tpl-company", templateVersion: 2, templateAssetDir: "/templates/company",
     });
     expect(desk.calls.modify).toHaveLength(0);
+  });
+});
+
+describe("UX30 — 1.0.30 interaction review", () => {
+  const event = (taskId: string, type: string, payload: Record<string, unknown>): BridgeEvent =>
+    ({ event_id: `${taskId}:${type}:${Math.random()}`, task_id: taskId, type, ts: new Date().toISOString(), payload } as BridgeEvent);
+  const outlineOf = (taskId: string, titles: string[]) =>
+    event(taskId, "task.vibe_outline", { outline: { slides: titles.map((headline, index) => ({ slide: index + 1, headline })) } });
+
+  it("UX30-01: applying and undoing a suggestion both say which file's bytes changed", async () => {
+    const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/review.docx", documentType: "docx" });
+    const undo = vi.spyOn(desk.api, "undoArtifactSuggestion");
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Replace Alpha with Beta; let me review first", { activeFileId: "source" }));
+    desk.push(completed("task-1", "/p/review.modified.docx", "docx"));
+    const changed = () => panel.events.filter((entry) => entry.kind === "task" && entry.fileChanged).map((entry) => (entry as { fileChanged?: string }).fileChanged);
+    expect(changed()).toEqual([]);
+    await service.applySuggestion("task-1");
+    expect(changed()).toEqual(["source"]);
+    await service.undoSuggestion("task-1");
+    expect(undo).toHaveBeenCalledTimes(1);
+    // The editor holding the source is told again: the disk is back to the original.
+    expect(changed()).toEqual(["source", "source"]);
+    expect(panel.last()?.suggestion?.applied).toBe(false);
+  });
+
+  it("UX30-03: retries a failed request with the unreadable file replaced and everything else kept", async () => {
+    const desk = scripted();
+    desk.addDocument({ id: "bad", filePath: "/p/UX28-corrupt.docx", documentType: "docx" });
+    desk.addDocument({ id: "good", filePath: "/p/UX28-review.docx", documentType: "docx" });
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Summarise this file in one paragraph", {
+      newConversation: true, mentions: [{ kind: "file", id: "bad", label: "UX28-corrupt.docx" }],
+    }));
+    const calls = () => desk.calls.modify.length + desk.calls.generate.length;
+    expect(calls()).toBe(1);
+    desk.push(event("task-1", "task.failed", { message: "failed to open OOXML: not a valid zip" }));
+    expect(panel.last()?.failureKind).toBe("input");
+    expect(panel.last()?.inputFile).toEqual({ name: "UX28-corrupt.docx", fileId: "bad" });
+
+    await service.retryWithFile!("task-1", { fileId: "good" });
+    expect(calls()).toBe(2);
+    const sent = (desk.calls.modify.at(-1) ?? desk.calls.generate.at(-1))!;
+    expect(sent.prompt).toContain("Summarise this file in one paragraph");
+    expect(JSON.stringify(sent)).toContain("UX28-review.docx");
+    expect(JSON.stringify(sent)).not.toContain("UX28-corrupt.docx");
+    desk.push(running("task-2"));
+    // The same task, tried again — not a second, unrelated message.
+    expect(panel.last()).toMatchObject({ logicalTaskId: "task-1", attempt: 2 });
+  });
+
+  it("UX30-03: swaps exactly the failed file, as a chip or as an attachment", () => {
+    const base = message("Read both", {
+      mentions: [{ kind: "file", id: "keep", label: "keep.docx" }, { kind: "file", id: "bad", label: "bad.docx" }],
+      activeFileId: "bad",
+      reference: { fileId: "bad", label: "bad.docx · selection", text: "x" },
+    });
+    const fromLibrary = replaceInputFile(base, "bad.docx", { fileId: "good", name: "good.docx" });
+    expect(fromLibrary.mentions.map((mention) => mention.label)).toEqual(["keep.docx", "good.docx"]);
+    expect(fromLibrary.activeFileId).toBe("good");
+    expect(fromLibrary.reference).toBeUndefined();
+    const fromDisk = replaceInputFile(base, "bad.docx", { path: "/d/good.docx", name: "good.docx" });
+    expect(fromDisk.mentions.map((mention) => mention.label)).toEqual(["keep.docx"]);
+    expect(fromDisk.attachments).toMatchObject([{ name: "good.docx", path: "/d/good.docx" }]);
+    expect(fromDisk.activeFileId).toBeNull();
+    // The original is not mutated: cancelling leaves the failed task as it was.
+    expect(base.mentions).toHaveLength(2);
+    expect(inputFileOf(base, "bad.docx")).toEqual({ name: "bad.docx", fileId: "bad" });
+  });
+
+  it("UX30-05: shows what the brief confirmation is about, in the interface language", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Make a three-slide review deck", { newConversation: true, documentType: "pptx", generationMode: "plan" }));
+    desk.push(running("task-1"));
+    desk.push(event("task-1", "task.question", {
+      id: "q-brief", kind: "pptx_brief", question: "Here is what I understood. Correct anything, then start.",
+      options: [{ id: "Start", label: "Start" }], allow_freeform: true,
+      brief: { audience: { value: "Design team" }, scenario: { value: "Quarterly review" }, pages: 3, style: { value: "Restrained" }, density: { value: "Balanced" }, language: "en" },
+    }));
+    const question = panel.last()!.question!;
+    expect(question.kind).toBe("pptx_brief");
+    expect(question.text).not.toContain("Here is what I understood");
+    expect(question.options).toMatchObject([{ id: "Start", label: "Confirm and draft the outline" }]);
+    expect(question.details).toEqual([
+      { label: "Audience", value: "Design team" },
+      { label: "Occasion", value: "Quarterly review" },
+      { label: "Length", value: "3 slides" },
+      { label: "Style", value: "Restrained" },
+      { label: "Density", value: "Balanced" },
+      { label: "Language", value: "en" },
+    ]);
+    // Waiting on the user is what the card's phase says, not the stage it paused in.
+    expect(panel.last()!.phase).toBe("Waiting for your answer");
+    expect(panel.last()!.messages.some((entry) => entry.text.includes("Here is what I understood"))).toBe(false);
+  });
+
+  it("UX30-06/07: a deck that failed with no checkpoint promises no resume, settles its pages and can be generated again", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    const template = { id: "tpl", version: 2, localAssetDir: "/t/tpl" };
+    await service.send(message("Three slides about the design review", { newConversation: true, documentType: "pptx", generationMode: "plan", pptxTemplate: template }));
+    desk.push(running("task-1"));
+    desk.push(outlineOf("task-1", ["One", "Two", "Three"]));
+    desk.push(event("task-1", "task.failed", { message: "PPTX content validation failed: requested exactly 3 slides, exported 1" }));
+    const failed = panel.last()!;
+    expect(failed.recovery).toBeUndefined();
+    expect(failed.error).not.toMatch(/Retry remaining/);
+    expect(failed.error).toMatch(/Generate it again/);
+    // No page is left "queued" under a run that is over.
+    expect(failed.outline?.map((page) => page.state)).toEqual(["canceled", "canceled", "canceled"]);
+
+    await service.retry!("task-1");
+    expect(desk.calls.generate).toHaveLength(2);
+    expect(desk.calls.generate[1]).toMatchObject({ templateId: "tpl", templateVersion: 2, templateAssetDir: "/t/tpl", generationMode: "plan" });
+    expect(desk.calls.generate[1].prompt).toContain("Three slides about the design review");
+  });
+
+  it("UX30-06: Retry on a run the runtime continued by itself falls back to the request it descends from", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); listen(service);
+    await service.send(message("Three slides about onboarding", { newConversation: true, documentType: "pptx" }));
+    desk.push(running("task-1"));
+    // A continuation the shell never sent: no retry input was recorded for it.
+    desk.push({ ...running("task-9"), payload: { parent_task_id: "task-1", conversation_id: "task-1", prompt: "Three slides about onboarding", document_type: "pptx" } });
+    desk.push(event("task-1", "task.cancelled", { message: "superseded" }));
+    desk.push(event("task-9", "task.failed", { message: "content generation failed" }));
+    await service.retry!("task-9");
+    expect(desk.calls.generate).toHaveLength(2);
+    expect(desk.calls.generate[1].prompt).toContain("Three slides about onboarding");
+  });
+
+  it("UX30-06: the outline confirmed before a failure is put back into the next gate", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Three slides about the launch", { newConversation: true, documentType: "pptx", generationMode: "plan" }));
+    desk.push(running("task-1"));
+    desk.push(outlineOf("task-1", ["A", "B", "C"]));
+    const gate = { id: "q-gate", kind: "pptx_outline_gate", question: "The deck outline is ready. Review it, then start generating.", options: [{ id: "approve", label: "Start generating", recommended: true }], allow_freeform: true };
+    desk.push(event("task-1", "task.question", gate));
+    expect(panel.last()!.question).toMatchObject({ text: "The outline is ready. Rename or remove pages, then start generating.", options: [{ id: "approve", label: "Start generating" }] });
+    await service.answer({ optionId: "approve", outline: [{ slide: 1, title: "A" }, { slide: 2, title: "Confirmed by design" }, { slide: 3, title: "C" }].map((page) => ({ ...page, state: null })) });
+    desk.push(event("task-1", "task.failed", { message: "PPTX content validation failed: requested exactly 3 slides, exported 1" }));
+    await service.retry!("task-1");
+    desk.push(running("task-2"));
+    desk.push(outlineOf("task-2", ["A again", "B again", "C again"]));
+    desk.push(event("task-2", "task.question", { ...gate, id: "q-gate-2" }));
+    expect(panel.last()!.outline?.map((page) => page.title)).toEqual(["A", "Confirmed by design", "C"]);
+  });
+
+  it("UX30-07: a completed deck's pages are all ready, whatever the page stream last said", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("One slide QA brief", { newConversation: true, documentType: "pptx" }));
+    desk.push(running("task-1"));
+    desk.push(outlineOf("task-1", ["QA brief"]));
+    expect(panel.last()!.outline?.map((page) => page.state)).toEqual([null]);
+    desk.push(completed("task-1", "/p/qa.pptx", "pptx"));
+    expect(panel.last()!.outline?.map((page) => page.state)).toEqual(["ready"]);
   });
 });

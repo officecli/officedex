@@ -146,8 +146,29 @@ export function createDesktopCanvas({
     for (const listener of failureListeners) listener(fileId, failure);
   };
 
+  /**
+   * The names the file on screen had before its current one.
+   *
+   * A selection's label is "<file name> · <where>", composed by the editor
+   * when the selection was made — and a rename does not restart the editor, so
+   * a reference that already existed went on naming the old file until the
+   * user selected something again (UX30-04). The file is the same one, by id;
+   * only what it is called moved. So the adapter, which is told the new name
+   * by `show`, rewrites the name in every label that passes through it and
+   * repeats the selection it last announced. The range is untouched.
+   */
+  let formerNames: string[] = [];
+  let lastSelection: CanvasSelection | null = null;
+
+  const relabel = (selection: CanvasSelection | null): CanvasSelection | null => {
+    if (!selection || !current || selection.fileId !== current.id) return selection;
+    const former = formerNames.find((name) => name !== current!.name && selection.label.startsWith(`${name} · `));
+    return former ? { ...selection, label: `${current.name}${selection.label.slice(former.length)}` } : selection;
+  };
+
   const announceSelection = (selection: CanvasSelection | null) => {
-    for (const listener of selectionListeners) listener(selection);
+    lastSelection = relabel(selection);
+    for (const listener of selectionListeners) listener(lastSelection);
   };
 
   const setSaveCopy = (save: typeof saveCopyCurrent) => { saveCopyCurrent = save; };
@@ -236,12 +257,19 @@ export function createDesktopCanvas({
         // is what stops the composer quoting the previous file.
         announceSelection(null);
         lastDirty = null;
+        formerNames = [];
       } else if (lastDirty !== null) {
         // The same editor, still holding whatever it held; see `lastDirty`.
         announceDirty(lastDirty);
       }
+      const renamed = current?.id === file.id && current.name !== file.name ? current.name : null;
       current = file;
       demoRequested = false;
+      if (renamed) {
+        formerNames.push(renamed);
+        // The reference already on screen takes the new name now, not at the next selection.
+        if (lastSelection) announceSelection(lastSelection);
+      }
       render();
     },
 
@@ -256,6 +284,20 @@ export function createDesktopCanvas({
       openAttempt += 1;
       current = file;
       demoRequested = false;
+      render();
+    },
+
+    invalidate(fileId) {
+      if (current?.id !== fileId) return;
+      saveCurrent = null;
+      saveCopyCurrent = null;
+      resolveCurrent = null;
+      editCurrent = null;
+      announceSelection(null);
+      // The editor that said "dirty" is the one being thrown away.
+      if (lastDirty) announceDirty(false);
+      lastDirty = null;
+      openAttempt += 1;
       render();
     },
 
@@ -337,7 +379,7 @@ export function createDesktopCanvas({
 
     async resolveSelection() {
       if (!resolveCurrent) return null;
-      return resolveCurrent();
+      return relabel(await resolveCurrent());
     },
 
     onDirtyChange(listener) {

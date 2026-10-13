@@ -89,6 +89,7 @@ export const shellAgentEn: Record<string, string> = {
   "shell.agent.error.document": "This file could not be read. It may be damaged or in an unsupported format. Choose another file to continue; retrying with the same file will not help.",
   "shell.agent.error.access": "The file could not be accessed. Check its file and folder permissions, then retry.",
   "shell.agent.error.partialSlides": "Some slides could not be completed. Keep the ready pages and use Retry remaining to finish the rest.",
+  "shell.agent.error.slidesIncomplete": "The deck came out with fewer slides than requested, and there is no progress to pick up from. Generate it again; your request and template are kept.",
   "shell.agent.error.timeout": "The task took too long to respond. Retry, or check Details if it happens again.",
   "shell.canvas.stillLoading": "The editor is still loading. Retry saving when it is ready.",
 };
@@ -177,7 +178,8 @@ export const shellAgentZh: Record<string, string> = {
   "shell.agent.error.network": "连接已中断。请检查网络连接后重试任务。",
   "shell.agent.error.document": "无法读取此文件，文件可能损坏或格式不受支持。请用“更换文件”选择有效的文件；用同一个文件重试不会成功。",
   "shell.agent.error.access": "无法访问文件。请检查文件和文件夹的权限后重试。",
-  "shell.agent.error.partialSlides": "部分幻灯片未能完成。已完成页面可保留，请使用“重试剩余项”继续。",
+  "shell.agent.error.partialSlides": "部分幻灯片未能完成。已完成页面可保留，请使用“重试未完成部分”继续。",
+  "shell.agent.error.slidesIncomplete": "生成的幻灯片页数不足，这次没有可接续的进度。请重新生成，原需求和模板都会保留。",
   "shell.agent.error.timeout": "任务响应超时。请重试；若再次发生，可查看详情。",
   "shell.canvas.stillLoading": "编辑器仍在加载，请加载完成后重试保存。",
 };

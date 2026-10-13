@@ -90,6 +90,24 @@ describe("taskState", () => {
     ]);
   });
 
+  // UX30-05: the brief rides beside the question; dropping it left a confirmation with nothing to confirm.
+  it("keeps the inferred brief a pptx_brief question carries", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-brief",
+      task_id: "task-1",
+      type: "task.question",
+      payload: {
+        id: "question-brief",
+        kind: "pptx_brief",
+        question: "Here is what I understood. Correct anything, then start.",
+        options: [{ id: "Start", label: "Start" }],
+        allow_freeform: true,
+        brief: { audience: { value: "Design team", options: ["Design team"] }, scenario: { value: " " }, pages: 3, style: { value: "Restrained" }, density: {}, language: "zh" },
+      },
+    });
+    expect(state.tasks["task-1"].question?.brief).toEqual({ audience: "Design team", pages: 3, style: "Restrained", language: "zh" });
+  });
+
   it("tracks active questions for interactive bridge tasks", () => {
     const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-1",

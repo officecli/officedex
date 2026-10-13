@@ -4,8 +4,8 @@ import { createDocxEditRunner } from "../canvas/docxEditRun";
 import { instructionText, reviewRequestedBy, requestsCopyOnly } from "../shared/requestIntent";
 export { reviewRequestedBy } from "../shared/requestIntent";
 import { readOfficeTextParts, readSuggestionChanges } from "./suggestionDiff";
-import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import { OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
+import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry, TaskQuestionBrief } from "../shared/types";
+import { BRIEF_KIND, OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
@@ -147,10 +147,23 @@ function toStatus(task: DesktopTask): AgentStatus {
   }
 }
 
+/**
+ * A stage's name in the interface language.
+ *
+ * The reducer names stages in English (`taskState.ts`); the ids are a small
+ * closed set, so each has a translation and an id nobody has translated keeps
+ * the name it came with (UX30-05: "Clarifying requirements" in a Chinese card).
+ */
+function stageLabel(stage: { id: string; label: string }): string {
+  const key = `shell.task.step.${stage.id}`;
+  const translated = translate(key);
+  return translated === key ? stage.label : translated;
+}
+
 function toSteps(task: DesktopTask): AgentStep[] {
   const steps: AgentStep[] = (task.stages ?? []).map((stage) => ({
     id: stage.id,
-    label: stage.label,
+    label: stageLabel(stage),
     state: stage.status === "completed" ? "done" : stage.status === "active" ? "active" : "pending",
   }));
   // A run that failed after every reported stage finished still failed somewhere.
@@ -164,10 +177,12 @@ function toSteps(task: DesktopTask): AgentStep[] {
 
 function phaseOf(task: DesktopTask): string {
   const active = (task.stages ?? []).find((stage) => stage.id === task.activeStageId);
-  if (active) return active.label;
+  // Waiting on the user outranks the stage the run paused in.
+  if (active && task.status !== "question" && task.status !== "plan_review") return stageLabel(active);
   if (task.status === "question") return translate("shell.service.phase.question");
   if (task.status === "plan_review") return translate("shell.service.phase.review");
-  if (task.status === "failed") return task.error?.trim() ? agentErrorSummary(task.error) : translate("shell.service.phase.failed");
+  if (task.status === "failed") return task.error?.trim() ? errorSummaryOf(task, task.error) : translate("shell.service.phase.failed");
+  if (active) return stageLabel(active);
   if (task.status === "completed") return translate("shell.service.phase.done");
   return "";
 }
@@ -200,7 +215,12 @@ function toMessages(task: DesktopTask): AgentMessage[] {
     messages.push({
       id: `${task.id}:question:${task.question.id}`,
       role: "agent",
-      text: task.question.question,
+      // The deck's two fixed stops are the shell's own sentences; see `toQuestion`.
+      text: task.question.kind === BRIEF_KIND
+        ? translate("shell.service.brief.confirm")
+        : task.question.kind === OUTLINE_GATE_KIND
+          ? translate("shell.service.outline.review")
+          : task.question.question,
       createdAt: at(task.events.at(-1)?.ts),
     });
   }
@@ -216,7 +236,7 @@ function toMessages(task: DesktopTask): AgentMessage[] {
     messages.push({
       id: `${task.id}:error`,
       role: "agent",
-      text: agentErrorSummary(task.error),
+      text: errorSummaryOf(task, task.error),
       createdAt: at(task.events.at(-1)?.ts),
     });
   }
@@ -260,21 +280,50 @@ function toQuestion(task: DesktopTask): AgentTask["question"] {
   const question = task.question;
   if (!question?.id) return null;
   const active = question.questions?.[question.currentIndex ?? 0];
+  /*
+   * The two stops a deck makes have fixed wording, and the runtime sends it in
+   * English whatever the interface is set to ("Here is what I understood…",
+   * "Start", "Start generating"). They are the shell's sentences to say, so
+   * they are said in the shell's language; a question the model wrote itself
+   * is left exactly as it came (UX30-05).
+   */
+  const fixed = question.kind === BRIEF_KIND
+    ? { text: translate("shell.service.brief.confirm"), option: translate("shell.service.brief.start") }
+    : question.kind === OUTLINE_GATE_KIND
+      ? { text: translate("shell.service.outline.review"), option: translate("shell.service.outline.start") }
+      : null;
+  const details = question.kind === BRIEF_KIND ? briefDetails(question.brief) : [];
   return {
     id: question.id,
-    text: (active?.question || question.question || "").trim(),
+    text: fixed?.text ?? (active?.question || question.question || "").trim(),
+    ...(details.length > 0 ? { details } : {}),
     // The runtime's gate arrives as a question with `allow_freeform: true` —
     // that is its degradation path for clients with no gate UI. The kind is
     // what says it is the gate; the shape no longer does.
     ...(question.kind ? { kind: question.kind } : {}),
-    options: (active?.options ?? question.options ?? []).map((option) => ({
+    options: (active?.options ?? question.options ?? []).map((option, index, all) => ({
       id: option.id,
-      label: option.label,
+      // A fixed stop has one way forward; its label is the shell's too.
+      label: fixed && all.length === 1 && index === 0 ? fixed.option : option.label,
       ...(option.description ? { description: option.description } : {}),
       ...(option.recommended ? { recommended: true } : {}),
     })),
     allowFreeform: active?.allowFreeform ?? question.allowFreeform ?? false,
   };
+}
+
+/** The inferred brief, as rows to read: only what the runtime actually filled in. */
+function briefDetails(brief: TaskQuestionBrief | undefined): Array<{ label: string; value: string }> {
+  if (!brief) return [];
+  const rows: Array<[string, string | undefined]> = [
+    ["audience", brief.audience],
+    ["scenario", brief.scenario],
+    ["pages", brief.pages ? translate("shell.service.brief.pageCount", { count: brief.pages }) : undefined],
+    ["style", brief.style],
+    ["density", brief.density],
+    ["language", brief.language],
+  ];
+  return rows.flatMap(([id, value]) => (value ? [{ label: translate(`shell.service.brief.${id}`), value }] : []));
 }
 
 /**
@@ -298,9 +347,42 @@ function toOutline(task: DesktopTask): AgentOutlinePage[] {
     return {
       slide: number,
       title: String(slide.headline ?? "").trim() || `Slide ${number}`,
-      state: states.get(number) ?? null,
+      state: settledPageState(task.status, states.get(number) ?? null),
     };
   });
+}
+
+/**
+ * A page's state once the run it belongs to is over.
+ *
+ * The page states come off a stream the runtime stops writing when the run
+ * ends, and some paths never write them at all — a deck filled from a template
+ * is exported in one step. So a finished run left its pages "queued" for ever:
+ * a completed one-page deck read "0 of 1 ready", a failed one kept three pages
+ * waiting for work that was never going to happen (UX30-07). The run's end is
+ * the later fact and settles them: a completed run's pages are in the file it
+ * wrote; a failed run keeps the pages that were finished, fails the ones it
+ * was in the middle of, and the ones it never reached were not made; a stopped
+ * run's unfinished pages were stopped with it.
+ */
+function settledPageState(status: DesktopTask["status"], state: AgentOutlinePage["state"]): AgentOutlinePage["state"] {
+  if (status === "completed") return "ready";
+  if (status !== "failed" && status !== "cancelled") return state;
+  if (state === "ready" || state === "failed" || state === "canceled") return state;
+  if (status === "failed" && (state === "generating" || state === "repairing")) return "failed";
+  return "canceled";
+}
+
+/**
+ * The failure in the user's words, for this task.
+ *
+ * "Use Retry remaining" is only true when there is a checkpoint to pick up
+ * from. Without one the same sentence sent the user to a button that was not
+ * there and then to an error (UX30-06), so a deck that cannot be resumed says
+ * so and points at generating again.
+ */
+function errorSummaryOf(task: DesktopTask, error: string): string {
+  return agentErrorSummary(error, { resumable: Boolean(resumeCheckpointOf(task)) });
 }
 
 /**
@@ -384,7 +466,7 @@ function outcomeOf(
   return {
     ...ended,
     outcome: network ? "interrupted" : kept ? "partial" : "failed",
-    ...(error ? { error: agentErrorSummary(error), errorDetail: error } : {}),
+    ...(error ? { error: errorSummaryOf(task, error), errorDetail: error } : {}),
     failureKind: network ? "network" : input ? "input" : model ? "model" : "other",
   };
 }
@@ -417,7 +499,7 @@ function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState):
   if (review?.applyError) Object.assign(result, { status: "done", outcome: "failed", error: agentErrorSummary(review.applyError), errorDetail: review.applyError });
   if (review?.applying) Object.assign(result, { status: "writing", outcome: undefined, finishedAt: undefined });
   if (!review || !review.artifactFile || review.applying || review.copyOnly) return result;
-  if (review.rejected) return { ...result, outcome: "stopped", suggestion: null };
+  if (review.rejected) return { ...result, outcome: "rejected", suggestion: null };
   return {
     ...result,
     suggestion: {
@@ -578,6 +660,18 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const batches = new Map<string, BatchItem[]>();
   const batchInputs = new WeakMap<SendInput, BatchItem>();
   const draining = new Set<string>();
+  /**
+   * The outline the user approved, by conversation and request.
+   *
+   * A deck that fails after its outline was confirmed is generated again from
+   * the same request, and the gate comes round again with a fresh draft. The
+   * titles the user already settled are put back into it, so approving is one
+   * press rather than the same edits a second time (UX30-06). Kept for this
+   * session only, and only applied to the same words asking for the same
+   * number of pages.
+   */
+  const confirmedOutlines = new Map<string, { prompt: string; titles: string[] }>();
+  const requestOf = (task: DesktopTask) => stripConversationContext(task.userInput?.prompt ?? "").trim();
   const attempts = new Map<string, number>();
   const attemptRoots = new Map<string, { id: string; startedAt?: number }>();
   const formatGates = new Map<string, SendInput>();
@@ -882,6 +976,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * sidebar through `list`; the card says what *this* run is.
      */
     const queued = (queues.get(conversationId) ?? []).map((entry) => ({ id: entry.id, text: entry.input.text.trim() }));
+    const confirmed = confirmedOutlines.get(conversationId);
+    if (
+      confirmed && result.question && result.outline && confirmed.titles.length === result.outline.length &&
+      (task.status === "plan_review" || result.question.kind === OUTLINE_GATE_KIND) && confirmed.prompt === requestOf(task)
+    ) {
+      result.outline = result.outline.map((page, index) => ({ ...page, title: confirmed.titles[index] || page.title }));
+    }
     return {
       ...result,
       title: displayTitle(task),
@@ -890,6 +991,11 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       logicalTaskId: attemptRoots.get(task.id)?.id ?? task.id,
       startedAt: attemptRoots.get(task.id)?.startedAt ?? result.startedAt,
       targetFileName: sentRuns.get(task.id)?.target?.fileName,
+      ...(() => {
+        const original = retryInputs.get(task.id);
+        const inputFile = original ? inputFileOf(original, sentRuns.get(task.id)?.target?.fileName) : undefined;
+        return inputFile ? { inputFile } : {};
+      })(),
       ...(batchItems ? { batch: batchItems.map((item) => {
         const run = item.taskId ? state.tasks[item.taskId] : undefined;
         return { fileId: item.fileId, name: item.name, taskId: item.taskId,
@@ -1613,6 +1719,62 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     emit({ kind: "task", task: project(task), focused: isFocused(task) });
   };
 
+  /**
+   * What to send to run `taskId`'s request again.
+   *
+   * The input is recorded against the run that `send` started. A run the
+   * runtime started on its own — the continuation after a confirmed brief, an
+   * approved outline — has no record, and Retry on it answered "nothing to
+   * continue, start again" with no way to start again (UX30-06). Such a run is
+   * the same request as the one it descends from, so that one's input is used;
+   * and when nothing in the lineage was recorded (a run from before a restart)
+   * the request is rebuilt from what the run itself remembers: its words, its
+   * template and its mode.
+   */
+  function retryInputFor(taskId: string): SendInput | undefined {
+    const seen = new Set<string>();
+    for (let id: string | undefined = taskId; id && !seen.has(id); ) {
+      seen.add(id);
+      const known = retryInputs.get(id);
+      if (known) return known;
+      id = state.tasks[id]?.parentTaskId ?? (attemptRoots.get(id)?.id !== id ? attemptRoots.get(id)?.id : undefined);
+    }
+    const task = state.tasks[taskId];
+    const remembered = task?.userInput;
+    const text = remembered?.prompt ? stripConversationContext(remembered.prompt).trim() : "";
+    if (!task || !text) return undefined;
+    const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx" ? task.documentType : undefined;
+    // An edit needs the file it was aimed at, which the run does not remember.
+    if (remembered?.sourceFile || !documentType) return undefined;
+    return {
+      text,
+      folderId: folderOf(task),
+      mentions: [],
+      attachments: [],
+      modelId: "",
+      permission: "full",
+      activeFileId: null,
+      documentType,
+      ...(remembered?.generationMode === "fast" || remembered?.generationMode === "plan" ? { generationMode: remembered.generationMode } : {}),
+      ...(remembered?.templateId && remembered.templateAssetDir
+        ? { pptxTemplate: { id: remembered.templateId, version: remembered.templateVersion ?? 1, localAssetDir: remembered.templateAssetDir } }
+        : {}),
+    };
+  }
+
+  /** Sends `input` as the next attempt of `taskId`, in the same conversation. */
+  async function redispatch(taskId: string, input: SendInput): Promise<void> {
+    const task = state.tasks[taskId];
+    await dispatch(input, conversationOf(task));
+    const next = headOf(conversationOf(task));
+    if (next && next.id !== taskId) {
+      attempts.set(next.id, (attempts.get(taskId) ?? 1) + 1);
+      attemptRoots.set(next.id, attemptRoots.get(taskId) ?? { id: taskId, startedAt: project(task).startedAt });
+      persistPending();
+      emit({ kind: "task", task: project(next), focused: isFocused(next) });
+    }
+  }
+
   const service: AgentPort = {
     async current(folderId) {
       const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
@@ -1782,6 +1944,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * format; `undefined` is the unmodified plan, which the runtime reads
        * as approved as proposed.
        */
+      if (blocked && input.outline?.length) {
+        confirmedOutlines.set(conversationOf(blocked), { prompt: requestOf(blocked), titles: input.outline.map((page) => page.title) });
+      }
       const edited = input.outline?.length
         ? planApprovalAnswer(
             input.outline.map((page, index) => ({
@@ -1881,18 +2046,20 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       }
     },
 
-    async retry(taskId) {
+    async retryWithFile(taskId, replacement) {
       const original = retryInputs.get(taskId);
       const task = state.tasks[taskId];
       if (!original || !task) throw new Error(translate("shell.service.nothingToResume"));
-      await dispatch(original, conversationOf(task));
-      const next = headOf(conversationOf(task));
-      if (next && next.id !== taskId) {
-        attempts.set(next.id, (attempts.get(taskId) ?? 1) + 1);
-        attemptRoots.set(next.id, attemptRoots.get(taskId) ?? { id: taskId, startedAt: project(task).startedAt });
-        persistPending();
-        emit({ kind: "task", task: project(next), focused: isFocused(next) });
-      }
+      const named = "fileId" in replacement
+        ? { fileId: replacement.fileId, name: (await api.getDocument(replacement.fileId)).fileName }
+        : replacement;
+      await redispatch(taskId, replaceInputFile(original, sentRuns.get(taskId)?.target?.fileName, named));
+    },
+
+    async retry(taskId) {
+      const original = retryInputFor(taskId);
+      if (!original || !state.tasks[taskId]) throw new Error(translate("shell.service.nothingToResume"));
+      await redispatch(taskId, original);
     },
 
     async sendQueued(taskId) {
@@ -2019,7 +2186,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (appliedTask) { appliedTask.status = "completed"; appliedTask.error = undefined; }
       persistReviews();
       const task = state.tasks[id];
-      if (task) emit({ kind: "task", task: project(task) });
+      if (task) emit({ kind: "task", task: project(task), fileChanged: review.sourceFileId });
     },
 
     async undoSuggestion(id) {
@@ -2032,7 +2199,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       review.undoable = false;
       persistReviews();
       const task = state.tasks[id];
-      if (task) emit({ kind: "task", task: project(task) });
+      // The source is back to its old bytes; whatever editor has it open is not.
+      if (task) emit({ kind: "task", task: project(task), fileChanged: review.sourceFileId });
     },
 
     async startConversation(folderId) {
@@ -2096,6 +2264,69 @@ function droppedNotice(dropped: string[]): string {
   return dropped.some((part) => part === "review mode" || part === "custom permission mode")
     ? translate("shell.service.dropped.with", { parts: droppedLabels(dropped) })
     : translate("shell.service.dropped.without", { parts: droppedLabels(dropped) });
+}
+
+type InputFileSlot =
+  | { kind: "attachment"; index: number; name: string; path?: string }
+  | { kind: "mention"; index: number; name: string; fileId: string }
+  | { kind: "active"; name: string; fileId: string };
+
+/**
+ * Which of a request's files a file failure is about.
+ *
+ * The runtime names the file it could not read; a request with one file has
+ * only one candidate anyway. The name decides between several, and without a
+ * match the first explicit file is taken — an attachment before a chip, a chip
+ * before the document that merely happened to be open.
+ */
+function inputFileSlot(input: SendInput, failedName?: string): InputFileSlot | null {
+  const attachments = input.attachments
+    .map((attachment, index): InputFileSlot => ({ kind: "attachment", index, name: attachment.name, path: attachment.path }))
+    .filter((slot) => slot.kind === "attachment" && Boolean(slot.path));
+  const mentions = input.mentions
+    .map((mention, index): InputFileSlot | null => (mention.kind === "file" && mention.id ? { kind: "mention", index, name: mention.label, fileId: mention.id } : null))
+    .filter((slot): slot is InputFileSlot => slot !== null);
+  const explicit = [...attachments, ...mentions];
+  const named = failedName ? explicit.find((slot) => slot.name === failedName) : undefined;
+  if (named) return named;
+  if (explicit.length > 0) return explicit[0];
+  return input.activeFileId ? { kind: "active", name: failedName ?? "", fileId: input.activeFileId } : null;
+}
+
+/** The file a request was pointed at, as the card names it. */
+export function inputFileOf(input: SendInput, failedName?: string): { name: string; fileId?: string; path?: string } | undefined {
+  const slot = inputFileSlot(input, failedName);
+  if (!slot || !slot.name) return undefined;
+  return slot.kind === "attachment" ? { name: slot.name, ...(slot.path ? { path: slot.path } : {}) } : { name: slot.name, fileId: slot.fileId };
+}
+
+/**
+ * The same request with one input file swapped for another (UX30-03).
+ *
+ * Everything else is the original's: the words, the other files, the mode. A
+ * library file goes in as a chip and a file from disk as an attachment,
+ * whichever the old one was — the runtime reads both the same way.
+ */
+export function replaceInputFile(
+  input: SendInput,
+  failedName: string | undefined,
+  replacement: { fileId: string; name: string } | { path: string; name: string },
+): SendInput {
+  const slot = inputFileSlot(input, failedName);
+  const next: SendInput = { ...input, mentions: [...input.mentions], attachments: [...input.attachments] };
+  if (slot?.kind === "attachment") next.attachments.splice(slot.index, 1);
+  if (slot?.kind === "mention") next.mentions.splice(slot.index, 1);
+  const oldId = slot && slot.kind !== "attachment" ? slot.fileId : undefined;
+  // A passage quoted from the file being replaced is a passage of the wrong file.
+  if (oldId && next.reference?.fileId === oldId) delete next.reference;
+  if ("fileId" in replacement) {
+    next.mentions.push({ kind: "file", id: replacement.fileId, label: replacement.name });
+    if (slot?.kind === "active" || next.activeFileId === oldId) next.activeFileId = replacement.fileId;
+  } else {
+    next.attachments.push({ id: `replacement:${replacement.path}`, name: replacement.name, size: 0, path: replacement.path });
+    if (slot?.kind === "active" || (oldId && next.activeFileId === oldId)) next.activeFileId = null;
+  }
+  return next;
 }
 
 /** The ids of the files a message names, through its chips and its quote, each once. */

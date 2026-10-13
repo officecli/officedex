@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskFailure, TaskFailureStage, TaskPartialWork, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskFailure, TaskFailureStage, TaskPartialWork, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskQuestionBrief, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
 import { normalizeVibeChart } from "../shared/chartModel";
 import type { SlidePreview } from "../shared/slidePreviewWire";
 
@@ -602,6 +602,7 @@ function questionFromPayload(payload: BridgeEvent["payload"]): TaskQuestion | un
     id: String(payload.id || ""),
     question: String(payload.question || ""),
     ...(typeof payload.kind === "string" && payload.kind.trim() ? { kind: payload.kind.trim() } : {}),
+    ...briefFromPayload(payload.brief),
     options,
     allowFreeform: payload.allow_freeform === true || payload.allowFreeform === true,
   };
@@ -629,6 +630,35 @@ function questionFromPayload(payload: BridgeEvent["payload"]): TaskQuestion | un
   }
 
   return question;
+}
+
+/**
+ * The brief a `pptx_brief` question is asking about.
+ *
+ * The runtime sends it beside the question (`brief.audience.value`, …). It was
+ * dropped here, so the card asked the user to confirm something it never
+ * showed (UX30-05). Fields that are missing or empty are simply left out.
+ */
+function briefFromPayload(raw: unknown): { brief?: TaskQuestionBrief } {
+  if (!raw || typeof raw !== "object") return {};
+  const record = raw as Record<string, unknown>;
+  const text = (value: unknown) => {
+    const inner = value && typeof value === "object" ? (value as Record<string, unknown>).value : value;
+    return typeof inner === "string" && inner.trim() ? inner.trim() : undefined;
+  };
+  const brief: TaskQuestionBrief = {};
+  const audience = text(record.audience);
+  const scenario = text(record.scenario);
+  const style = text(record.style);
+  const density = text(record.density);
+  const language = text(record.language);
+  if (audience) brief.audience = audience;
+  if (scenario) brief.scenario = scenario;
+  if (typeof record.pages === "number" && record.pages > 0) brief.pages = record.pages;
+  if (style) brief.style = style;
+  if (density) brief.density = density;
+  if (language) brief.language = language;
+  return Object.keys(brief).length > 0 ? { brief } : {};
 }
 
 const FAILURE_STAGES: readonly TaskFailureStage[] = ["plan", "content", "render", "export", "transport"];

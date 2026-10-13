@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
 import { translate, useT } from "../../renderer/i18n";
-import { contextRequests, referenceRequests } from "../chrome/useFileActions";
+import { referenceRequests } from "../chrome/useFileActions";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
 import type { Attachment, FileType, Mention, SendInput } from "../../shared/uiPort";
@@ -815,10 +815,6 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [files],
   );
-
-  // A failed run asks for another input file: open the same dialog as "add".
-  // Resubscribed each render so it always sees this render's selection.
-  useEffect(() => contextRequests.subscribe(() => chooseContext()));
 
   /** The "add" button: which files this message may use, and what it should make. */
   function chooseContext() {

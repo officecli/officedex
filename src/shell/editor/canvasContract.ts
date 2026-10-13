@@ -299,6 +299,18 @@ export interface CanvasAdapter {
    */
   reopen?(file: FileMeta): void;
   /**
+   * The file's bytes on disk were replaced behind the editor's back.
+   *
+   * An applied suggestion and its undo both rewrite the source file while an
+   * editor may be holding it, and `hide` keeps that editor alive after its tab
+   * closes — so the old content came back on reopening the same path, under a
+   * status that read "Saved" (UX30-01). If the editor being kept is for this
+   * file it is rebuilt from disk; any other file is left alone. Whatever the
+   * old editor had not saved goes with it: saving it would have written the
+   * stale document over the bytes that were just put there.
+   */
+  invalidate?(fileId: string): void;
+  /**
    * Show, replace or remove the in-document draft. Optional: an editor that
    * cannot render one leaves it out, and nothing else changes.
    */

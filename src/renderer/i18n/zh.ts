@@ -682,6 +682,7 @@ export const zh: Record<string, string> = {
   "shell.canvas.beingDrawn": "正在绘制——完成前下方工具栏不可用",
   "shell.canvas.gen.research": "正在检索资料",
   "shell.canvas.gen.outline": "正在起草大纲",
+  "shell.canvas.gen.waiting": "等待你确认",
   "shell.canvas.gen.writing": "正在撰写正文",
   "shell.canvas.gen.drawing": "正在绘制图表",
   "shell.canvas.gen.polish": "正在排版校对",

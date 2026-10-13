@@ -850,7 +850,7 @@ function Activity() {
             >
               <span className="dx-ellipsis">{task.title}</span>
             </button>
-            <span className="dx-pill">{t(task.outcome === "failed" ? "dx.run.failed" : task.outcome === "partial" ? "dx.run.partial" : task.outcome === "stopped" ? "dx.run.stopped" : `shell.agentStatus.${STATUS_KEY[task.status] ?? "idle"}`)}</span>
+            <span className="dx-pill">{t(task.outcome === "failed" ? "dx.run.failed" : task.outcome === "partial" ? "dx.run.partial" : task.outcome === "stopped" ? "dx.run.stopped" : task.outcome === "rejected" ? "dx.run.rejected" : `shell.agentStatus.${STATUS_KEY[task.status] ?? "idle"}`)}</span>
           </div>
         );
       })}

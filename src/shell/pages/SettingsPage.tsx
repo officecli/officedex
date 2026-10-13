@@ -42,7 +42,7 @@ import {
   openUsage,
   type SettingsUpdate,
 } from "./settings/dialogs";
-import { Row, Toggle } from "./settings/kit";
+import { Row, Select, Toggle } from "./settings/kit";
 
 const LICENSE_URL = "https://github.com/officecli/officedex/blob/main/LICENSE";
 
@@ -244,7 +244,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
     <>
       <h2>{t("dx.settings.section.general")}</h2>
       <Row title={t("dx.settings.appearance")} desc={t("dx.settings.appearanceDesc")}>
-        <select
+        <Select
           aria-label={t("dx.settings.appearance")}
           data-pref="theme"
           value={state.theme}
@@ -252,10 +252,10 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
         >
           <option value="light">{t("dx.settings.theme.light")}</option>
           <option value="dark">{t("dx.settings.theme.dark")}</option>
-        </select>
+        </Select>
       </Row>
       <Row title={t("dx.settings.language")} desc={t("dx.settings.languageDesc")}>
-        <select
+        <Select
           aria-label={t("dx.settings.language")}
           data-pref="language"
           value={locale}
@@ -263,7 +263,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
         >
           <option value="zh">{t("settings.option.language.zh")}</option>
           <option value="en">{t("settings.option.language.en")}</option>
-        </select>
+        </Select>
       </Row>
       <Row title={t("dx.settings.reduceMotion")} desc={t("dx.settings.reduceMotionDesc")}>
         <Toggle
@@ -282,7 +282,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
         />
       </Row>
       <Row title={t("dx.settings.defaultType")} desc={t("dx.settings.defaultTypeDesc")}>
-        <select
+        <Select
           aria-label={t("dx.settings.defaultType")}
           data-pref="defaultType"
           value={defaults.documentType}
@@ -293,7 +293,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
               {t(`dx.settings.type.${type}`)}
             </option>
           ))}
-        </select>
+        </Select>
       </Row>
       <Row title={t("dx.settings.includeImages")} desc={t("dx.settings.includeImagesDesc")}>
         <Toggle
@@ -988,7 +988,7 @@ function AboutBody({
         <span className="dx-pill">{t("dx.settings.version", { version: version || status.currentVersion })}</span>
       </div>
       <Row title={t("dx.settings.updateChannel")} desc={t("dx.settings.updateChannelDesc")}>
-        <select
+        <Select
           aria-label={t("dx.settings.updateChannel")}
           data-act="update-channel"
           value={settings.updateChannel ?? status.updateChannel ?? "stable"}
@@ -997,7 +997,7 @@ function AboutBody({
         >
           <option value="stable">{t("dx.settings.updateChannelStable")}</option>
           <option value="beta">{t("dx.settings.updateChannelBeta")}</option>
-        </select>
+        </Select>
       </Row>
       <Row title={t("dx.settings.updates")} desc={updates}>
         <button type="button" className="dx-btn" data-act="update-check" onClick={() => openUpdate(t)}>

@@ -42,7 +42,7 @@ export interface CanvasContentProps {
   onSaveCopy?: (save: (() => Promise<{ filePath: string }>) | null) => void;
   /** The file on screen failed to open or to save itself, or recovered. See `CanvasAdapter.onFileFailure`. */
   onFileFailure: (fileId: string, failure: FileFailure | null) => void;
-  /** Bumped by `CanvasAdapter.reopen`; the Word leaf is keyed on it so a retry is a fresh editor. */
+  /** Bumped by `CanvasAdapter.reopen` and `invalidate`; every editor leaf is keyed on it so the next mount is a fresh editor. */
   openAttempt?: number;
   /** Which toolbar the Word leaf lays out; a deck and a workbook keep their full chrome. */
   toolbarProfile?: CanvasToolbarProfile;
@@ -246,6 +246,7 @@ export function CanvasContent({
   if (open.type === "sheet") {
     return (
       <SheetCanvas
+        key={openAttempt}
         api={api}
         file={open}
         onDirtyChange={onDirtyChange}

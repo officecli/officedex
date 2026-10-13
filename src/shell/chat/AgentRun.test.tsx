@@ -474,3 +474,89 @@ for (const applied of [false, true]) it(`N27-01 shows one ${applied ? "saved" : 
     expect(run.actions()).toContain("undo-task");
   }
 });
+
+describe("UX30 — 1.0.30 interaction review", () => {
+  it("UX30-02: a rejected proposal says so, in the card and in Details, and offers no Resume", async () => {
+    const run = await stage("stopped", (task) => ({ ...task, outcome: "rejected", suggestion: null, error: undefined }));
+    expect(run.status()).toContain("Changes rejected");
+    expect(run.card().textContent).toContain("You rejected the changes. The original file is unchanged.");
+    expect(run.card().textContent).not.toContain("Stopped");
+    // Asking again is a new, named action; "Resume" would reuse the decision just made.
+    expect(run.action("task-retry")?.textContent).toBe("Propose changes again");
+    fireEvent.click([...run.card().querySelectorAll("button")].find((button) => button.textContent === "Details")!);
+    await waitFor(() => expect(document.querySelector("#dx-modal")?.textContent).toContain("Changes rejected"));
+  });
+
+  it("UX30-03: Choose another file is bound to the failed task and retries it in one action", async () => {
+    const run = await stage("failed", (task) => ({ ...task, failureKind: "input", inputFile: { name: "Broken.docx", fileId: "missing" } }));
+    const retryWithFile = vi.fn().mockResolvedValue(undefined);
+    run.port.agent.retryWithFile = retryWithFile;
+    fireEvent.click(run.card().querySelector<HTMLButtonElement>('[data-act="task-replace-file"]')!);
+    const modal = () => document.querySelector<HTMLElement>("#dx-modal")!;
+    await waitFor(() => expect(modal().textContent).toContain("Retry with another file"));
+    // The old file is named; nothing is chosen yet, so nothing can be retried.
+    expect(modal().querySelector("[data-replace-change]")?.textContent).toContain("Broken.docx");
+    const retry = () => modal().querySelector<HTMLButtonElement>('[data-act="replace-retry"]')!;
+    expect(retry().disabled).toBe(true);
+    const first = modal().querySelector<HTMLInputElement>('input[name="replacement-file"]')!;
+    fireEvent.click(first);
+    expect(retry().disabled).toBe(false);
+    fireEvent.click(retry());
+    await waitFor(() => expect(retryWithFile).toHaveBeenCalledWith(run.card().dataset.task, { fileId: first.value }));
+  });
+
+  it("UX30-03: cancelling leaves the failed task alone, and the unreadable file cannot be chosen again", async () => {
+    const now = Date.now();
+    const same = prototypeFiles(now).find((file) => file.type !== "image")!;
+    const run = await stage("failed", (task) => ({ ...task, failureKind: "input", inputFile: { name: same.name, fileId: same.id } }));
+    const retryWithFile = vi.fn().mockResolvedValue(undefined);
+    run.port.agent.retryWithFile = retryWithFile;
+    fireEvent.click(run.card().querySelector<HTMLButtonElement>('[data-act="task-replace-file"]')!);
+    const modal = () => document.querySelector<HTMLElement>("#dx-modal")!;
+    await waitFor(() => expect(modal().querySelector(`input[value="${same.id}"]`)).not.toBeNull());
+    fireEvent.click(modal().querySelector<HTMLInputElement>(`input[value="${same.id}"]`)!);
+    expect(modal().querySelector("[data-replace-same]")?.textContent).toContain(same.name);
+    expect(modal().querySelector<HTMLButtonElement>('[data-act="replace-retry"]')!.disabled).toBe(true);
+    fireEvent.click(modal().querySelector<HTMLButtonElement>('[data-act="modal-close"]')!);
+    expect(retryWithFile).not.toHaveBeenCalled();
+    expect(run.status()).toContain("Couldn’t finish");
+  });
+
+  it("UX30-05: a confirmation lists what is being confirmed", async () => {
+    const run = await stage("input", (task) => ({
+      ...task,
+      question: {
+        id: "q", kind: "pptx_brief", text: "This is what I understood from your request.", allowFreeform: true,
+        options: [{ id: "Start", label: "Confirm and draft the outline" }],
+        details: [{ label: "Audience", value: "Design team" }, { label: "Length", value: "3 slides" }],
+      },
+    }));
+    const details = run.card().querySelector("[data-question-details]")!;
+    expect([...details.querySelectorAll("dt")].map((node) => node.textContent)).toEqual(["Audience", "Length"]);
+    expect([...details.querySelectorAll("dd")].map((node) => node.textContent)).toEqual(["Design team", "3 slides"]);
+  });
+
+  it("UX30-06: a deck with nothing to pick up from is generated again, not 'retried remaining'", async () => {
+    const pages = [{ slide: 1, title: "One", state: "canceled" as const }];
+    const run = await stage("failed", (task) => ({ ...task, documentType: "pptx", outline: pages, recovery: undefined }));
+    expect(run.action("task-retry")?.textContent).toBe("Generate again");
+    const resumable = await stage("failed", (task) => ({ ...task, documentType: "pptx", outline: pages, recovery: { readyPages: 1, totalPages: 3 } }));
+    expect(resumable.action("task-retry")?.textContent).toBe("Retry remaining");
+  });
+
+  it("UX30-08: Details gives the summary first and the full technical text, wrapped and copyable", async () => {
+    const raw = "PPTX content validation failed: requested exactly 3 slides, exported 1";
+    const run = await stage("failed", (task) => ({ ...task, error: "The deck came out with fewer slides than requested.", errorDetail: raw }));
+    fireEvent.click([...run.card().querySelectorAll("button")].find((button) => button.textContent === "Details")!);
+    const section = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("#dx-modal [data-run-error]");
+      if (!found) throw new Error("no error section");
+      return found;
+    });
+    expect(section.querySelector("p")?.textContent).toBe("The deck came out with fewer slides than requested.");
+    expect(section.querySelector("details summary")?.textContent).toBe("Technical details");
+    // The whole message is in the document, not a clipped line of it.
+    expect(section.querySelector("pre")?.textContent).toBe(raw);
+    expect(section.querySelector('[data-act="copy-error"]')?.textContent).toBe("Copy details");
+  });
+});

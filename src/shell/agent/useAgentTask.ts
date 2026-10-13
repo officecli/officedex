@@ -4,7 +4,7 @@ import { usePort } from "../port/PortContext";
 import { reviewRequestedBy } from "../../shared/requestIntent";
 import { requestsNewFile, inferHomeTaskRoute } from "../../renderer/homeIntake";
 import { translate } from "../../renderer/i18n";
-import type { AgentMessage, AgentOutlinePage, AgentTask } from "../../shared/uiPort";
+import type { AgentMessage, AgentOutlinePage, AgentTask, InputFileReplacement } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { newConversationId } from "../state/libraryMeta";
 import { useCanvas } from "../canvas/CanvasContext";
@@ -496,6 +496,14 @@ export function useAgentTask() {
         await sendRef.current(lastLocalSubmission.current);
       } else await attempt(async () => { await port.agent.retry?.(taskId); });
     }, [port]),
+    retryWithFile: useCallback(
+      async (taskId: string, replacement: InputFileReplacement) =>
+        void (await attempt(async () => {
+          if (!port.agent.retryWithFile) throw new Error(translate("shell.service.nothingToResume"));
+          await port.agent.retryWithFile(taskId, replacement);
+        })),
+      [port],
+    ),
     sendQueued: useCallback(async (taskId: string) => {
       if (localSnapshot.current?.id === taskId) { const next = takeLocalQueued(); if (next) await sendRef.current(next.input); }
       else await attempt(async () => { await port.agent.sendQueued?.(taskId); });

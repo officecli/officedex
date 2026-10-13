@@ -9,6 +9,7 @@ import savedIcon from "../assets/titlebar/saved.svg";
 import shareIcon from "../assets/titlebar/share.svg";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasFileFailures } from "../canvas/useCanvasFileFailures";
+import { useCanvasContentSync } from "../canvas/useCanvasContentSync";
 import { DexFace } from "../dex/DexFace";
 import { FileIcon, Icon, extensionOf } from "../kit/Icon";
 import { usePort } from "../port/PortContext";
@@ -54,6 +55,8 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
   // The editor's own failures land here because this row is where they show:
   // the tab keeps its dot, the status reads "Save failed", Retry sits beside it.
   useCanvasFileFailures(canvas, fileActions.retry);
+  // An applied or undone suggestion rewrote a file; the editor holding it reloads.
+  useCanvasContentSync(canvas);
 
   const open = useMemo(
     () =>

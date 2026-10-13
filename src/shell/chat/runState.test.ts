@@ -28,6 +28,7 @@ const ALL_STATES: RunState[] = [
   "review",
   "complete",
   "stopped",
+  "rejected",
   "failed",
   "partial",
   "offline",

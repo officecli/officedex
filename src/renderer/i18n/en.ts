@@ -692,6 +692,7 @@ export const en: Record<string, string> = {
   "shell.canvas.beingDrawn": "Being drawn — the toolbar below is inactive until this deck is finished",
   "shell.canvas.gen.research": "Researching sources",
   "shell.canvas.gen.outline": "Drafting the outline",
+  "shell.canvas.gen.waiting": "Waiting for you to confirm",
   "shell.canvas.gen.writing": "Writing the slides",
   "shell.canvas.gen.drawing": "Drawing charts",
   "shell.canvas.gen.polish": "Laying out the pages",

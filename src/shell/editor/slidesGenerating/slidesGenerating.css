@@ -645,6 +645,11 @@
   animation: od-dot-idle calc(2.6s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
 }
 
+/* Stopped at a confirmation: nothing is being drawn, so nothing moves (UX30-05). */
+.shell-gen[data-waiting="true"] * {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shell-gen * {
     animation: none !important;

@@ -233,6 +233,18 @@ describe("a preference that has a backend", () => {
     fireEvent.change(view.find("[data-pref=theme]")!, { target: { value: "light" } });
     expect(view.find("#shell")?.dataset.theme).toBe("light");
   });
+
+  // UX30-09: each General select sits in the styled box (36px, shared chevron)
+  // rather than drawing as the system pop-up button, and is still a <select>.
+  it("draws the General selects in the styled control", async () => {
+    const view = await settings("general");
+    for (const pref of ["theme", "language", "defaultType"]) {
+      const select = view.find<HTMLSelectElement>(`[data-pref=${pref}]`)!;
+      expect(select.tagName).toBe("SELECT");
+      expect(select.parentElement?.className).toBe("dx-setting-select");
+      expect(select.parentElement?.querySelector(".dx-icon")).not.toBeNull();
+    }
+  });
 });
 
 describe("a control with nothing behind it", () => {

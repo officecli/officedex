@@ -483,23 +483,6 @@ export function useFileActions() {
  * screen. A tiny bus rather than shell state: a reference belongs to the
  * message being written, and the composer owns that.
  */
-/**
- * "Pick different files for this message", from a failed run whose input could
- * not be read, to the composer on screen (UX28-05). Same shape as below.
- */
-const contextListeners = new Set<() => void>();
-export const contextRequests = {
-  emit() {
-    contextListeners.forEach((listener) => listener());
-  },
-  subscribe(listener: () => void) {
-    contextListeners.add(listener);
-    return () => {
-      contextListeners.delete(listener);
-    };
-  },
-};
-
 type ReferenceListener = (fileId: string) => void;
 const referenceListeners = new Set<ReferenceListener>();
 export const referenceRequests = {

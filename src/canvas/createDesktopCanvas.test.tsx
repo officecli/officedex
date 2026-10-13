@@ -414,4 +414,63 @@ describe("desktop canvas adapter", () => {
     );
     expect(resolve).toHaveBeenCalledOnce();
   });
+  /*
+   * UX30-01. Applying a suggestion and taking it back both rewrite the file on
+   * disk while an editor may be holding it — and `hide` keeps that editor, so
+   * closing the tab and opening the same path again showed the old content.
+   */
+  it("rebuilds the editor holding a file whose bytes were replaced, and no other", async () => {
+    const { adapter } = mounted();
+    const save = vi.fn(async () => undefined);
+    const dirty: boolean[] = [];
+    adapter.onDirtyChange((value) => dirty.push(value));
+
+    act(() => adapter.show(file("memo", "doc")));
+    const before = lastDocProps;
+    act(() => (lastDocProps!.onEditor as (e: unknown) => void)({ save }));
+    act(() => (lastDocProps!.onDirtyChange as (d: boolean) => void)(true));
+
+    // Some other file changed: this editor is left exactly as it is.
+    act(() => adapter.invalidate!("other"));
+    expect(lastDocProps).toBe(before);
+
+    // The tab was closed (the editor is kept) and then the file was rewritten.
+    act(() => adapter.hide());
+    act(() => adapter.invalidate!("memo"));
+    expect(lastDocProps).not.toBe(before);
+    expect(lastDocProps!.file).toMatchObject({ id: "memo" });
+    // The stale editor's save handle went with it: it cannot write the old picture back.
+    await expect(adapter.save()).rejects.toThrow("still loading");
+    expect(save).not.toHaveBeenCalled();
+    expect(dirty.at(-1)).toBe(false);
+  });
+
+  /*
+   * UX30-04. A reference that already exists follows the file through a
+   * rename: same file id, same range, the new name — without selecting again.
+   */
+  it("renames the reference already on screen when its file is renamed", async () => {
+    const { adapter } = mounted();
+    const seen: Array<{ fileId: string; label: string } | null> = [];
+    adapter.onSelection((selection) => seen.push(selection));
+    const opened = file("deck");
+
+    act(() => adapter.show(opened));
+    act(() =>
+      (lastProps!.onSelectionChange as (s: unknown) => void)({ fileId: "deck", label: "deck.pptx · Slide 2", text: "", block: true }),
+    );
+    act(() => adapter.show({ ...opened, name: "UX30-manual.pptx" }));
+
+    expect(seen.at(-1)).toMatchObject({ fileId: "deck", label: "UX30-manual.pptx · Slide 2", block: true });
+
+    // An editor that still composes labels from the name it was opened under is corrected too.
+    const stale = vi.fn(async () => ({ fileId: "deck", label: "deck.pptx · B2:C4", text: "1\t2" }));
+    act(() => (lastProps!.onResolveSelection as (r: unknown) => void)(stale));
+    expect(await adapter.resolveSelection?.()).toMatchObject({ label: "UX30-manual.pptx · B2:C4", text: "1\t2" });
+
+    // A different file starts clean: nothing of the old names leaks into it.
+    act(() => adapter.show(file("other")));
+    act(() => (lastProps!.onSelectionChange as (s: unknown) => void)({ fileId: "other", label: "deck.pptx · Slide 1", text: "" }));
+    expect(seen.at(-1)).toMatchObject({ label: "deck.pptx · Slide 1" });
+  });
 });

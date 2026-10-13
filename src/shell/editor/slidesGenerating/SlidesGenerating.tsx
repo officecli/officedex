@@ -51,8 +51,11 @@ export function SlidesGenerating({ task }: { task: DesktopTask }) {
     const handle = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(handle);
   }, []);
-  const quiet = generationMotionQuiet(task, now) && (phase === "drawing" || phase === "polish");
-  const status = t(PHASE_STATUS[phase]);
+  // The run is stopped at a confirmation: nothing is being drafted, so the
+  // canvas says what the card beside it says and holds still (UX30-05).
+  const waiting = task.status === "question" || task.status === "plan_review";
+  const quiet = waiting || (generationMotionQuiet(task, now) && (phase === "drawing" || phase === "polish"));
+  const status = t(waiting ? "shell.canvas.gen.waiting" : PHASE_STATUS[phase]);
   const copy = slideCopyFromTask(task, phase);
   const showFilmstrip = phase !== "research";
   const showPaper = phase !== "research";
@@ -226,6 +229,7 @@ export function SlidesGenerating({ task }: { task: DesktopTask }) {
       className="shell-canvas-scroll shell-canvas-scroll--slides shell-gen"
       data-phase={phase}
       data-quiet={quiet ? "true" : "false"}
+      data-waiting={waiting ? "true" : undefined}
       data-testid="shell-slides-generating"
     >
       {showFilmstrip ? (

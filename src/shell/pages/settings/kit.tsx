@@ -1,4 +1,6 @@
-import type { InputHTMLAttributes, ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+
+import { Icon } from "../../kit/Icon";
 
 /**
  * The three things a Settings section is made of — OD-UI-1.2 §12.
@@ -45,6 +47,25 @@ export function Toggle({
       data-id={id}
       onClick={() => onChange(!checked)}
     />
+  );
+}
+
+/**
+ * A setting chosen from a short list.
+ *
+ * WebKit draws an unstyled `<select>` as the system pop-up button and ignores
+ * its height, so the General rows showed a control about 22px tall under a
+ * 36px `min-height` (UX30-09). The native look is switched off and the box is
+ * the stylesheet's: 36px, the interface type, and the same chevron the Local
+ * sort uses. The element is still a `<select>` — the menu, the keyboard and
+ * the focus ring are the platform's.
+ */
+export function Select({ children, ...select }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span className="dx-setting-select">
+      <select {...select}>{children}</select>
+      <Icon name="ChevronDown" size={14} />
+    </span>
   );
 }
 
