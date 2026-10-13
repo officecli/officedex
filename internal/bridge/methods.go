@@ -24,4 +24,8 @@ const (
 	MethodImageTemplatesList                 = "image_templates/list"
 	MethodImageTemplatesCreate               = "image_templates/create"
 	MethodImageTemplatePublishRequestsCreate = "image_template_publish_requests/create"
+	// Asks the engine what kind of file a request wants when the user did not
+	// say. Absent on engines older than the one that introduced it, so callers
+	// check the advertised methods first.
+	MethodIntentClassifyOutputType = "intent/classify-output-type"
 )

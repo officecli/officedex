@@ -146,6 +146,22 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
 }
 
 /**
+ * Whether nothing about a request says what kind of file to make.
+ *
+ * `inferHomeTaskRoute` answers with its fallback when the composer, a
+ * template, a file name and every keyword have all had nothing to say, and
+ * its result does not record that it did. Asking twice with two fallbacks
+ * does: an answer that follows the fallback was never read off the request.
+ * A refusal, a cleanup and a request for a source file are all decisions, so
+ * none of them counts as unstated.
+ */
+export function outputTypeIsUnstated(input: HomeTaskIntake): boolean {
+  const asDocument = inferHomeTaskRoute(input, "docx");
+  const asSlides = inferHomeTaskRoute(input, "pptx");
+  return asDocument.kind === "generate" && asSlides.kind === "generate" && asDocument.documentType !== asSlides.documentType;
+}
+
+/**
  * Formats a request can name that nothing here produces, as they read in a
  * refusal. Only checked once every supported keyword has missed, so "turn this
  * PDF into slides" is still slides; it is "turn this into a PDF" that stops.

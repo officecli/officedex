@@ -20,6 +20,16 @@ export interface ArtifactStageRuntimeInput {
 
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img" | "gif";
 export type GenerationMode = "fast" | "plan";
+
+/** The engine's reading of what kind of file a request asks for. */
+export interface OutputTypeClassification {
+  /** False when the running engine has no classifier to ask. */
+  available: boolean;
+  documentType: string;
+  /** The model's own certainty, 0 to 1. */
+  confidence: number;
+  reason?: string;
+}
 export type ImageRatio = "square" | "landscape" | "portrait";
 
 export type SpreadsheetFieldRole =
@@ -1452,6 +1462,12 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   writeHtmlAppFiles?(input: { root: string; files: Record<string, Uint8Array> }): Promise<string[]>;
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
+  /**
+   * Asks the engine which kind of file a request wants, for a request that did
+   * not say. Absent on a desktop host that predates it; `available: false`
+   * when the host has it and the running engine does not.
+   */
+  classifyOutputType?(prompt: string): Promise<OutputTypeClassification>;
   listImageTemplates(): Promise<ImagePromptTemplate[]>;
   createImageTemplate(input: CreateUserImageTemplateInput): Promise<ImagePromptTemplate>;
   createImageTemplatePublishRequest(input: CreateImageTemplatePublishRequestInput): Promise<ImageTemplatePublishRequest>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inferHomeTaskRoute, outputFileStem, requestedFileName, unsupportedOutputFormat } from "./homeIntake";
+import { inferHomeTaskRoute, outputFileStem, outputTypeIsUnstated, requestedFileName, unsupportedOutputFormat } from "./homeIntake";
 
 describe("inferHomeTaskRoute", () => {
   it("keeps a selected PPT template as pptx even when the prompt looks like a Word brief", () => {
@@ -133,6 +133,26 @@ describe("formats the product does not make", () => {
     expect(inferHomeTaskRoute({ prompt: "画一张赛博朋克风格的海报" }, "docx")).toMatchObject({ documentType: "img" });
     expect(inferHomeTaskRoute({ prompt: "给我详细介绍一下绝区零的剧情", documentType: "img" }, "docx")).toMatchObject({ documentType: "img" });
     expect(inferHomeTaskRoute({ prompt: "做一个季度复盘的 PPT" }, "img")).toMatchObject({ documentType: "pptx" });
+  });
+
+  it("knows when nothing said what to make", () => {
+    expect(outputTypeIsUnstated({ prompt: "给我详细介绍一下绝区零的剧情" })).toBe(true);
+    expect(outputTypeIsUnstated({ prompt: "我想要入坑绝区零，给我写一份入坑攻略" })).toBe(true);
+    expect(outputTypeIsUnstated({ prompt: "something about the launch" })).toBe(true);
+  });
+
+  it("does not call a request unstated when anything about it names a type", () => {
+    // the composer, a template, a file name, a keyword
+    expect(outputTypeIsUnstated({ prompt: "给我详细介绍一下绝区零的剧情", documentType: "img" })).toBe(false);
+    expect(outputTypeIsUnstated({ prompt: "给我详细介绍一下绝区零的剧情", templateId: "tpl-1" })).toBe(false);
+    expect(outputTypeIsUnstated({ prompt: "把结果保存为 notes.docx" })).toBe(false);
+    expect(outputTypeIsUnstated({ prompt: "画一张赛博朋克风格的海报" })).toBe(false);
+    expect(outputTypeIsUnstated({ prompt: "做一个季度复盘的 PPT" })).toBe(false);
+  });
+
+  it("does not call a refusal or a cleanup unstated", () => {
+    expect(outputTypeIsUnstated({ prompt: "export this as a PDF" })).toBe(false);
+    expect(outputTypeIsUnstated({ prompt: "Clean up the supplier catalog" })).toBe(false);
   });
 
   it("names the format as the refusal will", () => {

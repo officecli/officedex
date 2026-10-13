@@ -1,6 +1,6 @@
 import { setupBindings } from "./setupBindings";
 // The production transport: the Wails-generated bindings over the Go App.
-import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, FileDropPoint, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
+import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, OutputTypeClassification, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, FileDropPoint, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanResult, CampaignImageResult } from "../../shared/verticals";
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -138,6 +138,11 @@ export function createWailsAPI(): DesktopAPI {
     },
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
     getCapabilities: async () => decodeRawBytes(await WailsApp.GetCapabilities()),
+    classifyOutputType: async (prompt: string): Promise<OutputTypeClassification> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<OutputTypeClassification>>("ClassifyOutputType");
+      if (!fn) return { available: false, documentType: "", confidence: 0 };
+      return fn(toWails(prompt));
+    },
     startAgentRun: async (input: AgentRunStartInput): Promise<AgentRun> => {
       const fn = optionalWailsFunction<(arg: never) => Promise<AgentRun>>("StartAgentRun");
       if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
