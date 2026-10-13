@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   createEditorSaveBridge,
   editorHoldsEdits,
+  INLINE_ASSET_BYTE_LIMIT,
   inlineAssetUris,
   installSelectionNotifier,
   restoreAssetUris,
+  revokeAssetObjectUrls,
   type EditorSaveState,
   type EditorWorkbenchHandle,
 } from "./officedex-host-bridge";
@@ -52,6 +54,60 @@ describe("MOP asset inlining", () => {
     const binary = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
     expect(inlineAssetUris(binary, assets).content).toBe(binary);
     expect(restoreAssetUris(binary, new Map([["data:x", "mop-asset:/y"]]))).toBe(binary);
+  });
+
+  it("hands an asset too large for the document codec over as an object URL", () => {
+    // The codec refuses any string over 8 MiB and that fails the whole deck:
+    // a 10.6 MB template photo became a 14 MB data URI and the deck would not
+    // open. Small assets keep the data URI, which renders in every context.
+    const large = new Uint8Array(INLINE_ASSET_BYTE_LIMIT + 1);
+    const mixed = new Map([
+      ["media/a.jpg", { contentType: "image/jpeg", data: new Uint8Array([1, 2, 3, 4]) }],
+      ["media/big.jpg", { contentType: "image/jpeg", data: large }],
+    ]);
+    const source = deck("mop-asset:/media/big.jpg");
+    source.slides[1].shapes[0].fill.resourceUri = "mop-asset:/media/a.jpg";
+    const original = encode(source);
+
+    // jsdom has no object URLs; the webview does.
+    let minted = 0;
+    const urls = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    const native = { create: urls.createObjectURL, revoke: urls.revokeObjectURL };
+    urls.createObjectURL = (blob: Blob) => {
+      expect(blob.size).toBe(large.byteLength);
+      expect(blob.type).toBe("image/jpeg");
+      return `blob:officedex/${++minted}`;
+    };
+    const revoke = vi.fn();
+    urls.revokeObjectURL = revoke;
+    onTestFinished(() => {
+      urls.createObjectURL = native.create;
+      urls.revokeObjectURL = native.revoke;
+    });
+
+    const { content, restore, objectUrls } = inlineAssetUris(original, mixed);
+    const document = decode(content);
+    const bigUri = document.slides[0].shapes[0].fill.resourceUri;
+
+    expect(bigUri).toMatch(/^blob:/);
+    expect(objectUrls).toEqual([bigUri]);
+    expect(document.slides[1].shapes[0].fill.resourceUri).toBe("data:image/jpeg;base64,AQIDBA==");
+    // No string in what the codec will read comes near its limit.
+    expect(content.byteLength).toBeLessThan(1024);
+    // Saving still writes the package's own references.
+    expect(decode(restoreAssetUris(content, restore))).toEqual(decode(original));
+
+    revokeAssetObjectUrls(objectUrls);
+    expect(revoke).toHaveBeenCalledWith(bigUri);
+  });
+
+  it("mints no object URL for assets within the inline limit", () => {
+    const atLimit = new Map([
+      ["media/a.jpg", { contentType: "image/jpeg", data: new Uint8Array(INLINE_ASSET_BYTE_LIMIT) }],
+    ]);
+    const { content, objectUrls } = inlineAssetUris(encode(deck("mop-asset:/media/a.jpg")), atLimit);
+    expect(objectUrls).toEqual([]);
+    expect(decode(content).slides[0].shapes[0].fill.resourceUri).toMatch(/^data:image\/jpeg;base64,/);
   });
 
   it("keeps editor-authored data URIs that the bridge never inlined", () => {
