@@ -111,6 +111,10 @@ export default defineConfig({
         "local-runtime-bootstrap.js",
       ),
       "@presentation/app": fromApp("src"),
+      // The SVG slide compiler the editor draws `slide.svg` pages with. pnpm
+      // links it under the engine's node_modules; the alias keeps the bundle
+      // building from a checkout where that link has not been made yet.
+      "@shimo/svg-slide": fromSource("packages", "svg-slide", "src"),
       "@presentation/assets": fromSource("packages", "presentation-assets", "src"),
       "@presentation/collab": fromSource("packages", "presentation-collab", "src"),
       "@presentation/collaboration-runtime": fromSource(
