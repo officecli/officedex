@@ -23,7 +23,7 @@ interface Scripted {
   addDocument: (record: Partial<DocumentRecord> & Pick<DocumentRecord, "id" | "filePath" | "documentType">) => DocumentRecord;
 }
 
-function scripted(startSerial = 0): Scripted {
+function scripted(startSerial = 0, defaultType = "pptx"): Scripted {
   const listeners: Array<(event: BridgeEvent) => void> = [];
   const documents = new Map<string, DocumentRecord>();
   const calls: Scripted["calls"] = { generate: [], modify: [], cancel: [] };
@@ -37,7 +37,7 @@ function scripted(startSerial = 0): Scripted {
       return [];
     },
     async getSettings() {
-      return { defaults: { documentType: "pptx", enableImages: false, enableWebSearch: false, imageQuality: "standard" } };
+      return { defaults: { documentType: defaultType, enableImages: false, enableWebSearch: false, imageQuality: "standard" } };
     },
     async getDocument(id: string) {
       const record = documents.get(id);
@@ -346,6 +346,28 @@ describe("F02 — review before the change lands", () => {
     for (const text of ["Write a review of the product", "审阅意见已经收到，按它改", "apply the changes"]) {
       expect(reviewRequestedBy(text), text).toBe(false);
     }
+  });
+});
+
+describe("what silence about the type means", () => {
+  it("writes a document, not a picture, when the default is image and no type was named", async () => {
+    for (const prompt of ["给我详细介绍一下绝区零的剧情", "我想要入坑绝区零，给我写一份入坑攻略"]) {
+      const desk = scripted(0, "img");
+      const service = createAgentService(desk.api);
+
+      await service.send(message(prompt, { newConversation: true }));
+      expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+    }
+  });
+
+  it("still makes the picture the words or the composer ask for", async () => {
+    const desk = scripted(0, "img");
+    const service = createAgentService(desk.api);
+
+    await service.send(message("画一张赛博朋克风格的海报", { newConversation: true }));
+    await service.send(message("做一个季度复盘的 PPT", { newConversation: true }));
+    await service.send(message("给我详细介绍一下绝区零的剧情", { newConversation: true, documentType: "img" }));
+    expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["img", "pptx", "img"]);
   });
 });
 

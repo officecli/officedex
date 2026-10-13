@@ -121,6 +121,20 @@ describe("formats the product does not make", () => {
     expect(inferHomeTaskRoute({ prompt: "something about the launch" }, "docx")).toEqual({ kind: "generate", documentType: "docx", sourceFile: undefined });
   });
 
+  it("never lets a default of image decide what silence means", () => {
+    for (const prompt of ["给我详细介绍一下绝区零的剧情", "我想要入坑绝区零，给我写一份入坑攻略"]) {
+      expect(inferHomeTaskRoute({ prompt }, "img")).toEqual({ kind: "generate", documentType: "docx", sourceFile: undefined });
+      expect(inferHomeTaskRoute({ prompt }, "gif")).toEqual({ kind: "generate", documentType: "docx", sourceFile: undefined });
+    }
+    expect(inferHomeTaskRoute({ prompt: "something about the launch" }, "xlsx")).toMatchObject({ documentType: "xlsx" });
+  });
+
+  it("still makes an image when one is asked for", () => {
+    expect(inferHomeTaskRoute({ prompt: "画一张赛博朋克风格的海报" }, "docx")).toMatchObject({ documentType: "img" });
+    expect(inferHomeTaskRoute({ prompt: "给我详细介绍一下绝区零的剧情", documentType: "img" }, "docx")).toMatchObject({ documentType: "img" });
+    expect(inferHomeTaskRoute({ prompt: "做一个季度复盘的 PPT" }, "img")).toMatchObject({ documentType: "pptx" });
+  });
+
   it("names the format as the refusal will", () => {
     expect(unsupportedOutputFormat("a plain text file please")).toBe("TXT");
     expect(unsupportedOutputFormat("make me a deck")).toBeNull();

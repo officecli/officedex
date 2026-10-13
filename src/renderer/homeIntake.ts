@@ -133,7 +133,16 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
   const unsupportedFallback = unsupportedOutputFormat(prompt);
   if (unsupportedFallback) return { kind: "unsupported_format", format: unsupportedFallback };
 
-  return { kind: "generate", documentType: fallback, sourceFile };
+  /*
+   * Nothing in the words named a type, so the settings default decides — but
+   * a picture is never what silence means. With the default left on image,
+   * 「给我详细介绍一下绝区零的剧情」 went out as an image run: the user asked
+   * to be told something and was drawn a poster. An image is only made when it
+   * is asked for, by the composer's image mode or by the words; a default of
+   * image (or GIF) falls back to a document instead.
+   */
+  const silent = fallback === "img" || fallback === "gif" ? "docx" : fallback;
+  return { kind: "generate", documentType: silent, sourceFile };
 }
 
 /**
