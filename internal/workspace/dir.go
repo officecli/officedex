@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 
@@ -155,6 +156,43 @@ func Slugify(input string) string {
 			}
 		}
 		if b.Len() >= slugMaxLen {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// FolderDirName maps a folder name the user typed to the directory that holds
+// it. Letters and digits of any script are kept, lowercased, and everything
+// else — separators, dots, punctuation — collapses to a hyphen, so the result
+// is always a single path segment. It is capped at 40 characters.
+//
+// Slugify is not used here because it keeps ASCII only: a name written
+// entirely in Chinese came out empty and could not be created at all, and two
+// names that differed only in their Chinese part were given one directory.
+func FolderDirName(name string) string {
+	var b strings.Builder
+	b.Grow(len(name))
+	kept := 0
+	lastDash := true
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+			kept++
+			lastDash = false
+		case unicode.IsMark(r) && !lastDash:
+			// A combining mark belongs to the letter before it.
+			b.WriteRune(r)
+			kept++
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				kept++
+				lastDash = true
+			}
+		}
+		if kept >= slugMaxLen {
 			break
 		}
 	}

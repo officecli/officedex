@@ -114,6 +114,25 @@ func TestSlugify(t *testing.T) {
 	}
 }
 
+func TestFolderDirNameKeepsLettersOfAnyScript(t *testing.T) {
+	cases := map[string]string{
+		"  Client work ":         "client-work",
+		"季度报告":                   "季度报告",
+		"季度报告 Q3 / 2026":         "季度报告-q3-2026",
+		"Été à Paris":            "été-à-paris",
+		"プロジェクト・計画":              "プロジェクト-計画",
+		"../../etc":              "etc",
+		"///":                    "",
+		"🚀":                      "",
+		strings.Repeat("报告", 30): strings.Repeat("报告", 20),
+	}
+	for in, want := range cases {
+		if got := FolderDirName(in); got != want {
+			t.Errorf("FolderDirName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestTaskDirNameSortsByTimeAndFallsBackToTypeThenTask(t *testing.T) {
 	at := time.Date(2026, 9, 4, 15, 4, 5, 0, time.UTC)
 	id := "0123456789abcdef-ffff"

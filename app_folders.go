@@ -104,9 +104,10 @@ func (a *App) FolderPath(folderID string) (string, error) {
 // CreateFolder makes a new directory under the default folder and registers it.
 //
 // The UI supplies a name, not a path: a folder is somewhere the app puts
-// things, and where that is is this layer's business. Names are slugified the
-// same way task output directories are, so what appears in Finder matches what
-// the user typed as closely as the filesystem allows.
+// things, and where that is is this layer's business. The directory keeps the
+// letters and digits of the name in whatever script they are written, so what
+// appears in Finder matches what the user typed as closely as the filesystem
+// allows.
 func (a *App) CreateFolder(name string) (types.FolderRecord, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -116,7 +117,7 @@ func (a *App) CreateFolder(name string) (types.FolderRecord, error) {
 	if err != nil {
 		return types.FolderRecord{}, err
 	}
-	slug := workspace.Slugify(name)
+	slug := workspace.FolderDirName(name)
 	if slug == "" {
 		return types.FolderRecord{}, fmt.Errorf("folder name has no usable characters: %q", name)
 	}

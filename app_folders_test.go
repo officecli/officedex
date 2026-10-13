@@ -123,6 +123,43 @@ func TestCreateFolderMakesADirectoryAndRefusesDuplicates(t *testing.T) {
 	}
 }
 
+// A project name is whatever the user's language is. The directory keeps those
+// characters rather than being reduced to the ASCII that happens to be in it.
+func TestCreateFolderAcceptsNonASCIINames(t *testing.T) {
+	app, _, workspaceDir := newFolderTestApp(t)
+
+	created, err := app.CreateFolder("季度报告")
+	if err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	if created.Name != "季度报告" {
+		t.Errorf("name = %q, want what the user typed", created.Name)
+	}
+	if want := filepath.Join(workspaceDir, "季度报告"); created.Path != want {
+		t.Errorf("path = %s, want %s", created.Path, want)
+	}
+	if info, err := os.Stat(created.Path); err != nil || !info.IsDir() {
+		t.Fatalf("directory was not created at %s: %v", created.Path, err)
+	}
+
+	// Two names that share only their ASCII part are two projects.
+	first, err := app.CreateFolder("季度报告 Q3")
+	if err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	second, err := app.CreateFolder("年度总结 Q3")
+	if err != nil {
+		t.Fatalf("CreateFolder: %v", err)
+	}
+	if first.Path == second.Path {
+		t.Errorf("both projects landed in %s", first.Path)
+	}
+
+	if _, err := app.CreateFolder("季度报告"); err == nil {
+		t.Error("expected a refusal for a name already in use")
+	}
+}
+
 // Renaming changes the label. The directory keeps its name: renaming it would
 // move every file inside and break paths the editors already hold.
 func TestRenameFolderLeavesTheDirectoryAlone(t *testing.T) {
