@@ -909,6 +909,12 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
 	}
 	input = taskrecovery.NormalizeText(input)
+	if templateDir := strings.TrimSpace(input.TemplateAssetDir); templateDir != "" {
+		// Templates imported by older builds lack files generation now needs.
+		if err := pptxtemplate.EnsureDistilled(templateDir); err != nil {
+			return GenerateResult{}, fmt.Errorf("prepare PPT template: %w", err)
+		}
+	}
 	if a.demoFlow != nil {
 		if result, ok, err := a.demoFlow.TryGenerate(a.ctx, input); ok || err != nil {
 			if err != nil {
