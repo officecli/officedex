@@ -1151,8 +1151,7 @@ export class VibeReplaySequencer {
       if (typeof op?.seq === "number" && op.seq > 0 && !bySeq.has(op.seq)) bySeq.set(op.seq, op);
     }
     this.ops = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
-    this.cursor = this.ops.findIndex((op) => op.seq > this.executedSeq);
-    if (this.cursor < 0) this.cursor = this.ops.length;
+    this.alignCursor();
     if (this.performing === undefined) {
       // A stream that is already complete is usually history being caught up,
       // and catching up should be quick. A recording replayed on purpose is the
@@ -1206,12 +1205,24 @@ export class VibeReplaySequencer {
     }, 5_000);
   }
 
+  /** Points the cursor at the first op that has not been executed. */
+  private alignCursor() {
+    this.cursor = this.ops.findIndex((op) => op.seq > this.executedSeq);
+    if (this.cursor < 0) this.cursor = this.ops.length;
+  }
+
   /**
    * Takes the next chunk: up to CHUNK_SIZE contiguous ops, closing on
    * slide.end. Trace mode narrows chunks to a single op so every op can be
    * announced before it runs.
    */
   private nextChunk(): VibeOp[] {
+    // An update that lands while a chunk is on the editor re-derives the
+    // cursor from executedSeq, which has not moved yet — so it points back at
+    // the chunk in flight. Taking the next chunk from there fails the
+    // contiguity check and the drawing stops until some later update happens
+    // to arrive. Nothing is in flight here, so derive it again.
+    this.alignCursor();
     const chunk: VibeOp[] = [];
     // Trace announces each op before it runs, but the drawing still wants
     // several shapes in one script so they can be written at the same time.

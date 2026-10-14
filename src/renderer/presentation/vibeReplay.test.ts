@@ -801,6 +801,42 @@ describe("VibeReplaySequencer", () => {
     expect(executed.join("\n")).toContain("第 2 页");
   });
 
+  it("draws a page that arrived while the one before it was still being drawn", async () => {
+    const { controller, powerPoint } = fakeController();
+    // Hold the first drawing script open, the way a performed page keeps the
+    // editor busy for seconds while the next page's ops are already arriving.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const run = controller.executeScript as unknown as ReturnType<typeof vi.fn>;
+    const draw = run.getMockImplementation() as (source: string) => Promise<unknown>;
+    let holding = true;
+    run.mockImplementation(async (source: string) => {
+      if (holding && source.includes("PowerPoint.run")) {
+        holding = false;
+        await held;
+      }
+      return draw(source);
+    });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
+    const ops = opStream(2);
+
+    sequencer.update({ taskId: "t1", ops: ops.slice(0, 5), completed: false });
+    await flush();
+    // Page 2 lands mid-draw. Nothing else arrives after it: the generation is
+    // busy with later pages, so no further update comes to nudge the drawing.
+    sequencer.update({ taskId: "t1", ops: ops.slice(0, 9), completed: false });
+    await flush();
+    release();
+    await flush();
+    await flush();
+    await flush();
+
+    expect(powerPoint.deck.map((slide) => slide.shapes.map((shape) => shape.text).filter(Boolean))).toEqual([
+      ["第 1 页"],
+      ["第 2 页"],
+    ]);
+  });
+
   it("reports failure and stops when a chunk throws", async () => {
     const { controller } = fakeController();
     (controller.executeScript as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("editor gone"));
