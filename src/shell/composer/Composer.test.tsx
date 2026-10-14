@@ -494,8 +494,8 @@ describe("model choice", () => {
   it("says so and keeps the half-written message when the port refuses the switch", async () => {
     const shell = await conversation();
     const sent = watchSends(shell);
-    shell.port.settings.patch = async () => {
-      throw new NotImplementedError("settings.patch", "Switching models is not wired up yet.");
+    shell.port.models.select = async () => {
+      throw new NotImplementedError("models.select", "Switching models is not wired up yet.");
     };
 
     await type(chatInput(shell), "Tidy the deck.");
@@ -517,6 +517,78 @@ describe("model choice", () => {
 
     await press(shell.view.getByTitle("Send message"));
     expect(sent[0].modelId).toBe("gpt-6-astra");
+  });
+
+  /**
+   * The desktop keeps one provider, so its custom model is `removedOnSwitch`:
+   * ticking the official row deletes an endpoint and a key. The picker used to
+   * move the tick and do nothing; now that it does the thing, it asks first.
+   */
+  describe("leaving a model that is removed by leaving it", () => {
+    const single = (): RenderShellOptions => ({
+      models: [
+        { id: "official", name: "OfficeDex", provider: "OfficeDex" },
+        { id: "custom", name: "gpt-6-astra", provider: "custom", custom: true, removedOnSwitch: true },
+      ],
+      settings: {
+        permission: "full",
+        enterToSend: true,
+        customInstructions: "",
+        reduceMotion: false,
+        selectedModelId: "custom",
+      },
+    });
+
+    async function pickOfficial(shell: Shell) {
+      const selected: string[] = [];
+      const select = shell.port.models.select;
+      shell.port.models.select = async (id) => {
+        selected.push(id);
+        return select(id);
+      };
+      await press(shell.view.getByTitle("Choose model"));
+      await press(shell.view.getByRole("menuitemradio", { name: /^OfficeDex/ }));
+      return selected;
+    }
+
+    it("asks before switching, and switches on a yes", async () => {
+      const shell = await conversation(SEED_FOLDER_ID, single());
+      const selected = await pickOfficial(shell);
+
+      const dialog = shell.view.getByRole("dialog");
+      expect(dialog.textContent).toContain("endpoint and key are removed from this device");
+      // Nothing has happened yet: the question is the point.
+      expect(selected).toEqual([]);
+
+      await press(within(dialog).getByRole("button", { name: "Use official model" }));
+
+      await waitFor(() => expect(selected).toEqual(["official"]));
+      await waitFor(async () => {
+        expect((await shell.port.settings.get()).selectedModelId).toBe("official");
+      });
+    });
+
+    it("changes nothing on a no", async () => {
+      const shell = await conversation(SEED_FOLDER_ID, single());
+      const selected = await pickOfficial(shell);
+
+      await press(within(shell.view.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+      expect(selected).toEqual([]);
+      await press(shell.view.getByTitle("Choose model"));
+      expect(shell.view.getByRole("menuitemradio", { name: /gpt-6-astra/ })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+    });
+
+    it("does not ask about the model already in use", async () => {
+      const shell = await conversation(SEED_FOLDER_ID, single());
+      await press(shell.view.getByTitle("Choose model"));
+      await press(shell.view.getByRole("menuitemradio", { name: /gpt-6-astra/ }));
+
+      expect(shell.view.queryByRole("dialog")).toBeNull();
+    });
   });
 });
 

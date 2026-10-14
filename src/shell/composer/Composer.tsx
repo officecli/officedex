@@ -8,6 +8,7 @@ import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
 import type { Attachment, FileType, Mention, SendInput } from "../../shared/uiPort";
 import { FileIcon, Icon, extensionOf } from "../kit/Icon";
+import { openConfirmDialog } from "../kit/dialogs";
 import { openMenu } from "../kit/layers";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
@@ -848,11 +849,26 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   }
 
   function chooseModel(anchor: HTMLElement) {
+    const current = settings.models.find((model) => model.id === settings.value.selectedModelId);
     openMenu(anchor, [
       ...settings.models.map((model) => ({
         label: model.provider ? `${model.name} · ${model.provider}` : model.name,
-        checked: model.id === settings.value.selectedModelId,
-        onSelect: () => void settings.patch({ selectedModelId: model.id }),
+        checked: model.id === current?.id,
+        onSelect: () => {
+          if (model.id === current?.id) return;
+          if (!current?.removedOnSwitch) {
+            void settings.selectModel(model.id);
+            return;
+          }
+          // Leaving this model deletes its endpoint and key, so it gets the
+          // question the Models page asks for the same thing, in its words.
+          openConfirmDialog({
+            title: t("dx.settings.modelUseOfficialTitle"),
+            body: <p>{t("dx.settings.modelUseOfficialBody")}</p>,
+            action: t("dx.settings.modelUseOfficialAction"),
+            onConfirm: async () => void (await settings.selectModel(model.id)),
+          });
+        },
       })),
       "-",
       { label: t("dx.composer.manageModels"), onSelect: () => dispatch({ type: "go", page: "settings", section: "models" }) },

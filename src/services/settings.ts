@@ -104,8 +104,21 @@ export function createSettingsService(api: DesktopAPI): SettingsPort {
   }
 
   return {
+    /**
+     * The local half is read once; which model is in use is asked again every
+     * time.
+     *
+     * It is the one field here this service does not own — the Models page
+     * writes the provider straight to the desktop — so a cached answer kept
+     * saying `official` after a provider had been added, and the composer went
+     * on listing and ticking a model no run was using.
+     */
     async get() {
-      cached ??= await load();
+      if (!cached) {
+        cached = await load();
+      } else {
+        cached = { ...cached, selectedModelId: selectedModelIdOf(await api.getSettings()) };
+      }
       return { ...cached };
     },
 

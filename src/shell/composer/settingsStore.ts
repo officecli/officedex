@@ -84,6 +84,8 @@ export class SettingsStore {
   #snapshot: SettingsSnapshot = { value: FALLBACK_SETTINGS, models: [] };
   readonly #listeners = new Set<() => void>();
   #load: "idle" | "running" | "done" = "idle";
+  #refresh: Promise<void> | null = null;
+  #reads = 0;
   /**
    * Whether the user has already changed something.
    *
@@ -176,19 +178,94 @@ export class SettingsStore {
   };
 
   /**
-   * Re-reads the model list after the custom-model dialog has changed it.
+   * Re-reads the port after something other than this store changed it.
    *
-   * Shared for the same reason the settings are: adding a model from the
-   * composer used to leave every other reader of `models` on the old list.
+   * The Models page writes the provider to the desktop directly, not through
+   * `patch`, so nothing here knew: the composer kept offering the list it read
+   * at startup, without the model that had just been added, until the app was
+   * restarted. Which model is in use comes back with it, because adding a
+   * provider is also what makes it the current one.
+   *
+   * The preferences this store owns are kept as they are on screen — a toggle
+   * may be in flight, and the port has nothing newer to say about those.
+   *
+   * Every mounted reader hears the same change and asks at once, so concurrent
+   * calls share one read.
    */
-  readonly reloadModels = async (): Promise<void> => {
+  readonly refresh = (): Promise<void> => {
+    if (this.#load !== "done") {
+      this.load();
+      return Promise.resolve();
+    }
+    this.#refresh ??= (async () => {
+      try {
+        await this.#reread();
+      } catch (reason) {
+        reportPortFailure(reason);
+      } finally {
+        this.#refresh = null;
+      }
+    })();
+    return this.#refresh;
+  };
+
+  /**
+   * Makes a model the one runs use, then shows what the port now says.
+   *
+   * Not `patch({ selectedModelId })`, which is what the composer called for as
+   * long as it has had a picker: that records a pick and repoints nothing, so
+   * the tick moved while every run stayed on the configured provider, and the
+   * next read put the tick back. `ModelPort.select` is the call that takes
+   * effect.
+   *
+   * The list is re-read rather than patched because selecting can change it —
+   * on the desktop, leaving the custom model removes it (`removedOnSwitch`).
+   *
+   * Never rejects, for the same reason `patch` does not. Returns whether the
+   * port made the switch.
+   */
+  readonly selectModel = async (id: string): Promise<boolean> => {
+    const before = this.#snapshot.value.selectedModelId;
+    if (id === before) return true;
+    this.#patched = true;
+    this.#emit({ ...this.#snapshot, value: { ...this.#snapshot.value, selectedModelId: id } });
     try {
-      const models = await this.#port.models.list();
-      this.#emit({ models, value: withLiveModel(this.#snapshot.value, models) });
+      await this.#port.models.select(id);
+    } catch (reason) {
+      this.#emit({ ...this.#snapshot, value: { ...this.#snapshot.value, selectedModelId: before } });
+      reportPortFailure(reason);
+      return false;
+    }
+    try {
+      await this.#reread();
     } catch (reason) {
       reportPortFailure(reason);
     }
+    return true;
   };
+
+  /**
+   * One read of the model list and of which model is in use.
+   *
+   * Reads can overlap — a switch and the change event it causes each start
+   * one — so only the latest to start is shown; an older answer arriving late
+   * would put back the list from before the switch.
+   */
+  async #reread(): Promise<void> {
+    const read = ++this.#reads;
+    const [settings, models] = await Promise.all([
+      this.#port.settings.get(),
+      this.#port.models.list(),
+    ]);
+    if (read !== this.#reads) return;
+    this.#emit({
+      models,
+      value: withLiveModel(
+        { ...this.#snapshot.value, selectedModelId: settings.selectedModelId },
+        models,
+      ),
+    });
+  }
 
   #emit(snapshot: SettingsSnapshot): void {
     this.#snapshot = snapshot;
