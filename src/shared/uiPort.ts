@@ -806,8 +806,27 @@ export interface UiPort {
   images?: ImagePort;
 }
 
+/**
+ * The PPT Templates skill (1.0.12 §五): a file is chosen, its name confirmed,
+ * and only then learned. Choosing and learning are separate calls so the user
+ * can confirm the name in between and learning can be retried from the same
+ * file without choosing it again.
+ */
 export interface PptxTemplatePort {
   list(): Promise<import("./pptxTemplates").PptxTemplateAssetSummary[]>;
-  import(onProgress: (progress: import("./types").PptxTemplateProgress) => void): Promise<import("./pptxTemplates").PptxTemplateAssetSummary | null>;
+  /** The system file picker; null when cancelled. */
+  pick(): Promise<PptxTemplateSource | null>;
+  /** Learns a chosen file under `name`; progress arrives as it goes. */
+  learn(
+    input: { sourcePath: string; name: string },
+    onProgress: (progress: import("./types").PptxTemplateProgress) => void,
+  ): Promise<import("./pptxTemplates").PptxTemplateAssetSummary>;
+  rename(id: string, name: string): Promise<void>;
   remove(id: string): Promise<void>;
+}
+
+export interface PptxTemplateSource {
+  path: string;
+  /** The file's own name, extension included. */
+  fileName: string;
 }

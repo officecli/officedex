@@ -16,6 +16,7 @@ import type {
 } from "../../../shared/uiPort";
 import { createFakeAgent } from "./fakeAgent";
 import { createFakeImageStore } from "./fakeImages";
+import { createFakePptxTemplates, type FakePptxTemplates } from "./fakePptxTemplates";
 import { SEED_FOLDER_ID, seedFiles, seedFolders, seedModels, seedSettings } from "./seed";
 
 export interface FakePortOptions {
@@ -30,6 +31,8 @@ export interface FakePortOptions {
   asksQuestion?: boolean;
   setTimeout?: (fn: () => void, ms: number) => unknown;
   clearTimeout?: (handle: unknown) => void;
+  /** The PPT template library; tests pass one they can steer. */
+  pptxTemplates?: FakePptxTemplates;
 }
 
 const EXTENSIONS: Record<FileType, string> = { doc: "docx", sheet: "xlsx", slides: "pptx", image: "png" };
@@ -316,6 +319,8 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
     window: createBrowserWindowPort(),
 
     images: images.port(() => files),
+
+    pptxTemplates: (options.pptxTemplates ?? createFakePptxTemplates()).port,
   };
 }
 

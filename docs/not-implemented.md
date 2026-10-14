@@ -29,6 +29,8 @@
 | `agent.applySuggestion` | 任务面板的 "Review and apply" | 已接入文件级 artifact apply：Review 修改先写独立副本，用户确认后才替换源文件；运行中的编辑器视图仍需重新打开源文件才能显示替换后的 bytes | 已接上（Office 三件套统一） |
 | `agent.undoSuggestion` | 任务面板的 "Undo" | 已接入进程内源文件快照恢复；应用重启后快照失效，且源文件发生外部变化时不会强行恢复 | 已接上（Office 三件套统一） |
 | `agent.pause` / `agent.resume` | 任务面板的暂停/继续 | 只有 pptx 有 `pausePptx` / `resumePptxLive`。其它类型的 run 没法在边界上按住 | 需 runtime 推广 |
+| `skills.stopLearning` | Skills → PPT 模板卡片的「停止」（1.0.12 §五） | `ImportPptxTemplate` 是一次同步调用，没有 context 取消，也没有「从已完成步骤继续」。点击提示暂不支持，学习会自行完成或失败；失败后「重试」用同一源文件重新学习 | 需桌面端可取消的导入 |
+| PPT / PDF 模板 | Skills → 上传模板（1.0.12 §五要求 PPT / PPTX / PDF） | 桌面端只认 `.pptx`（`app_pptx_template.go` 校验扩展名、走 mop-convert）。选择器只放 PPTX，选到别的会直接提示，不会先接下来再丢掉 | 需 ppt/pdf → MOP 转换 |
 
 ## 二、`agent.send` 的部分字段仍受 runtime 协议限制（发出 `notice` 事件）
 

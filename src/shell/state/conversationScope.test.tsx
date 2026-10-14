@@ -342,7 +342,7 @@ describe("opening a chat that has history", () => {
     const view = await shell({ files: prototypeFiles().filter((file) => file.originConversationId !== PROTOTYPE_CHAT_IDS.deck) });
     await openRow(view, PROTOTYPE_CHAT_IDS.deck);
     expect(view.state()).toMatchObject({ page: "editor", activeFileId: null });
-    expect(view.find(".dx-chat-empty")).not.toBeNull();
-    expect(view.find(".dx-chat-empty [data-act=show-assets]")).not.toBeNull();
+    expect(view.find("[data-view=chat-empty]")).not.toBeNull();
+    expect(view.find("[data-view=chat-empty] [data-act=show-assets]")).not.toBeNull();
   });
 });

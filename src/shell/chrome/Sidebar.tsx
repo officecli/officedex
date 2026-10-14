@@ -5,6 +5,7 @@ import type { Account } from "../account/useAccount";
 import { Icon } from "../kit/Icon";
 import { useShell, type Chat, type Project } from "../state/ShellContext";
 import { sameChat, type AvatarId, type ChatRef } from "../state/shellReducer";
+import { openSkills } from "../skills/templateLibrary";
 import { useChatEntry } from "./useChatEntry";
 import { useWorkspaceMenus } from "./useWorkspaceMenus";
 
@@ -238,6 +239,23 @@ export function Sidebar({
         >
           <Icon name="FolderOpen" />
           <span>{t("dx.nav.local")}</span>
+        </button>
+        {/* 1.0.12 UI-16: Skills, in private beta — the badge is a label, not a control. */}
+        <button
+          type="button"
+          className={state.page === "skills" ? "dx-nav-item dx-selected" : "dx-nav-item"}
+          data-act="skills"
+          title={t("dx.nav.skills")}
+          aria-label={t("dx.nav.skills")}
+          aria-description={t("dx.nav.betaDescription")}
+          aria-current={state.page === "skills" ? "page" : undefined}
+          onClick={() => openSkills(state, dispatch)}
+        >
+          <Icon name="Puzzle" />
+          <span>{t("dx.nav.skills")}</span>
+          <span className="dx-nav-beta" title={t("dx.nav.betaDescription")} aria-hidden="true">
+            {t("dx.nav.beta")}
+          </span>
         </button>
       </div>
 

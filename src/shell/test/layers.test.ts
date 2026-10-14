@@ -73,6 +73,7 @@ const V11 = "src/shell/styles/workspace-v11.css";
 const V12 = "src/shell/styles/workspace-v12.css";
 const ATTENTION = "src/shell/styles/attention.css";
 const SIDEBAR_RESIZE = "src/shell/styles/sidebar-resize.css";
+const PPT_SKILLS = "src/shell/styles/ppt-skills.css";
 
 /**
  * The ladder, copied from `tokens.css` — and asserted equal to it below, so the
@@ -469,6 +470,16 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     rung: "--dx-z-raised",
     context: "root",
     note: "Home's composer, one rung over the project rail it overlaps by 12px (1.0.12 UI-07).",
+  },
+  {
+    file: PPT_SKILLS,
+    selector: ".dx-composer .dx-skill-input-wrap textarea",
+    rung: "--dx-z-raised",
+    context: "root",
+    note:
+      "The composer's text over the mirror that highlights an inline `/Name` " +
+      "template reference (1.0.12 §五). The wrap is positioned but opens no " +
+      "context, so this compares at the root — against nothing that overlaps it.",
   },
   { file: V12, selector: "#dx-global-controls", rung: "--dx-z-global-controls", context: "root" },
   {

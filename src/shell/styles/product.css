@@ -410,3 +410,6 @@
   pointer-events: none;
   color: var(--dx-muted);
 }
+
+/* Home's quick-start row: the PPT templates entry, then the create buttons. */
+#shell .dx-quick-start { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }

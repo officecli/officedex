@@ -38,6 +38,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { filesTouchedBy } from "./pages/fileRows";
 import { useKeyboardShortcuts } from "./chrome/useKeyboardShortcuts";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SkillsPage } from "./pages/SkillsPage";
 import { workspaceClasses } from "./state/workspaceClasses";
 import { useShell } from "./state/ShellContext";
 import { navMaxWidth, tabIsChat, workspaceClosed } from "./state/shellReducer";
@@ -48,6 +49,7 @@ import "./styles/workspace-v11.css";
 import "./styles/workspace-v12.css";
 import "./styles/attention.css";
 import "./styles/workspace-structure.css";
+import "./styles/ppt-skills.css";
 import "./styles/outer-typography.css";
 import "./styles/sidebar-resize.css";
 import "./styles/product.css";
@@ -287,6 +289,7 @@ function Workspace() {
           {state.page === "projects" ? <ProjectsPage /> : null}
           {state.page === "assets" ? <AssetsPage /> : null}
           {state.page === "image" ? <ImageCreatePage /> : null}
+          {state.page === "skills" ? <SkillsPage /> : null}
           {state.page === "settings" ? <SettingsPage onOpenAccount={() => setAccountOpen(true)} /> : null}
           {chatEmpty ? <ChatEmpty /> : null}
 

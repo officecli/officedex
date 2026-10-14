@@ -13,9 +13,9 @@ import { openMenu } from "../kit/layers";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
 import type { FileMeta } from "../../shared/uiPort";
+import { openSkills } from "../skills/templateLibrary";
 import { useShell, type Project } from "../state/ShellContext";
 import { FeatureHighlights } from "./FeatureHighlights";
-import { PptxTemplatesButton } from "./PptxTemplates";
 import { CREATABLE, NEW_GROUPS, recentFiles, type NewType } from "./fileRows";
 
 /** Home's Recent has no run beside it, so nothing is working or under review. */
@@ -82,7 +82,15 @@ export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }
         </div>
 
         <div className="dx-quick-start">
-          <PptxTemplatesButton />
+          {/* The template library is a skill now (1.0.12 §五): this opens its page. */}
+          <button
+            type="button"
+            className="dx-btn"
+            data-act="pptx-templates"
+            onClick={() => openSkills(state, dispatch, "ppt-templates")}
+          >
+            {t("home.localTemplates")}
+          </button>
           <div className="dx-quick-new" role="group" aria-label={t("dx.home.quickStart")}>
             <span className="dx-quick-start-label">{t("dx.home.quickStart")}</span>
             <span className="dx-quick-separator" role="separator" aria-orientation="vertical" />

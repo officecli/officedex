@@ -75,6 +75,15 @@
   --dx-play-scrim: #343a40c0;
   --dx-backdrop: #0000003d; /* modal backdrop, black 24% */
 
+  /* The miniature sample deck on a PPT template card (1.0.12 Skills). A
+     drawing of a slide, not interface: it keeps its paper in either theme. */
+  --dx-sample-paper: #f7f5f0;
+  --dx-sample-ink: #29333b;
+  --dx-sample-accent: #596f86;
+  --dx-sample-edge: #e1e3e5;
+  --dx-sample-rule: #c9ced1;
+  --dx-sample-block: #dde2e5;
+
   /* brand — BRAND-DEX-STANDARD §04 */
   --dx-face-tile: #2b2b2b;
   --dx-dex-ink: #252525;
@@ -119,15 +128,24 @@
    * the hero at its narrow breakpoint and a rendered preview's heading; 9 is
    * the glyph inside a traffic light. Line heights are written beside the size
    * they belong to, as the standard pairs them.
+   *
+   * 1.0.12's PPT template card draws a miniature sample deck: 7, 10 and 18 are
+   * that drawing's cover label, step numbers and cover title, and 11 and 18 are
+   * sizes the Skills layer writes before the outer type layer sets them to the
+   * scale above. None of them is a size for interface text.
    */
   --dx-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI",
     "Microsoft YaHei", sans-serif;
   --dx-font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --dx-fs-7: 7px;
   --dx-fs-9: 9px;
+  --dx-fs-10: 10px;
+  --dx-fs-11: 11px;
   --dx-fs-12: 12px;
   --dx-fs-13: 13px;
   --dx-fs-14: 14px;
   --dx-fs-16: 16px;
+  --dx-fs-18: 18px;
   --dx-fs-20: 20px;
   --dx-fs-22: 22px;
   --dx-fs-24: 24px;

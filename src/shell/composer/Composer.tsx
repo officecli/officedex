@@ -1,20 +1,31 @@
 import { ArrowUp, Square } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
 import { translate, useT } from "../../renderer/i18n";
 import { referenceRequests } from "../chrome/useFileActions";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
+import type { PptxTemplateAssetSummary } from "../../shared/pptxTemplates";
 import type { Attachment, FileType, Mention, SendInput } from "../../shared/uiPort";
 import { FileIcon, Icon, extensionOf } from "../kit/Icon";
 import { openConfirmDialog } from "../kit/dialogs";
-import { openMenu } from "../kit/layers";
+import { notice, openMenu } from "../kit/layers";
+import { onTemplateUse, openSkills, readyTemplates, takeTemplateUse, useTemplateLibrary } from "../skills/templateLibrary";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
 import { useDiskDrop } from "../home/useDiskDrop";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, isImeKeyEvent, type MentionOption } from "./MentionMenu";
+import { SlashTemplateMenu } from "./SlashTemplateMenu";
+import {
+  insertTemplateToken,
+  promptWithoutTemplate,
+  slashQueryAt,
+  templateReferenceOf,
+  templateTokenIndex,
+  type TemplateReference,
+} from "./templateReference";
 import { openTaskContext } from "./TaskContextDialog";
 import { useComposerSettings } from "./useComposerSettings";
 import { ImageComposerHeader, ImageSummary, ImageTools } from "../image/composer/ImageTools";
@@ -77,9 +88,11 @@ interface Draft {
    */
   modeFileId?: string | null;
   image: ImageDraft;
+  /** The PPT template `/Name` in the text stands for (1.0.12 §五). */
+  template?: TemplateReference | null;
 }
 
-const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "auto", mode: "agent", image: EMPTY_IMAGE_DRAFT };
+const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "auto", mode: "agent", image: EMPTY_IMAGE_DRAFT, template: null };
 
 /**
  * Half-written messages, per placement, for as long as the tab is open.
@@ -162,7 +175,7 @@ const sameMessage = (left: Draft, right: Draft) =>
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
   SendInput,
-  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference" | "documentType" | "imageGeneration"
+  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference" | "documentType" | "imageGeneration" | "pptxTemplate" | "generationMode"
 >;
 
 export interface ComposerProps {
@@ -291,6 +304,53 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   const staleImage = draft.mode === "image" && documentOnScreen && (draft.modeFileId ?? null) !== activeFile?.id;
   const mode: Draft["mode"] = forcedImage ? "image" : staleImage ? "agent" : draft.mode;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  /*
+   * `/` and the PPT templates it offers: Home and a conversation, not Dex over
+   * a Local document (1.0.12 §五 keeps that entry as it is).
+   */
+  const templatesHere = placement !== "floating";
+  const { snapshot: templateSnapshot } = useTemplateLibrary(port);
+  const ready = readyTemplates(templateSnapshot);
+  const [slash, setSlash] = useState<{ start: number; query: string } | null>(null);
+  const template = draft.template ?? null;
+
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const tokenAt = template ? templateTokenIndex(text, template) : -1;
+  const mirrorParts =
+    template && tokenAt >= 0
+      ? {
+          before: text.slice(0, tokenAt),
+          token: text.slice(tokenAt, tokenAt + template.name.length + 1),
+          after: text.slice(tokenAt + template.name.length + 1),
+        }
+      : null;
+  const syncMirrorScroll = () => {
+    if (mirrorRef.current && inputRef.current) mirrorRef.current.scrollTop = inputRef.current.scrollTop;
+  };
+  // The mirror wraps where the textarea wraps only if it is set in the same type
+  // and box; read from the textarea so a theme or density change follows.
+  useLayoutEffect(() => {
+    const mirror = mirrorRef.current;
+    const input = inputRef.current;
+    if (!mirror || !input || !mirrorParts) return;
+    const css = getComputedStyle(input);
+    for (const property of [
+      "fontFamily",
+      "fontSize",
+      "fontWeight",
+      "lineHeight",
+      "letterSpacing",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "textIndent",
+      "wordSpacing",
+    ] as const) {
+      mirror.style[property] = css[property];
+    }
+    mirror.scrollTop = input.scrollTop;
+  });
   /** True while a speech recogniser is running — see `dictate`. */
   const [listening, setListening] = useState(false);
 
@@ -306,7 +366,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   function patchDraft(patch: (current: Draft) => Partial<Draft>) {
     const next = { ...latestDraft.current, ...patch(latestDraft.current) };
     latestDraft.current = next;
-    const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto" && next.mode === "agent";
+    const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto" && next.mode === "agent" && !next.template;
     if (empty) drafts.delete(`${placement}:${draftKey}`);
     else drafts.set(`${placement}:${draftKey}`, next);
     setDraft(next);
@@ -327,6 +387,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   const setMode = (value: Draft["mode"]) =>
     patchDraft(() => ({ mode: value, modeFileId: documentOnScreen ? (activeFile?.id ?? null) : null }));
   const setImage = (patch: Partial<ImageDraft>) => patchDraft((current) => ({ image: { ...current.image, ...patch } }));
+  const setTemplate = (template: TemplateReference | null) => patchDraft(() => ({ template }));
 
   useEffect(() => {
     onRegisterImageMode?.((on) => setMode(on ? "image" : "agent"));
@@ -359,7 +420,9 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   const scope = folders.find((folder) => folder.id === scopeFolderId) ?? folders[0];
-  const canSend = text.trim().length > 0;
+  /** What the message asks for, without the `/Name` token: a template alone is not a task. */
+  const body = promptWithoutTemplate(text, template);
+  const canSend = template ? body.length > 0 : text.trim().length > 0;
   /**
    * The send button doubles as Stop — but never on Home.
    *
@@ -609,10 +672,46 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
 
   function handleInput(value: string, caret: number) {
     setText(value);
+    // Typing into the `/Name` token un-references the template; the words stay.
+    if (template && templateTokenIndex(value, template) < 0) setTemplate(null);
     const before = value.slice(0, caret);
     const match = /(?:^|\s)@([^@\n]{0,100})$/.exec(before);
     setMentionQuery(match ? match[1] : null);
+    const typed = templatesHere && mode !== "image" && !match ? slashQueryAt(value, caret) : null;
+    // The caret just past the existing token is not a new `/`.
+    setSlash(typed && !(template && typed.start === templateTokenIndex(value, template)) ? typed : null);
   }
+
+  /** Puts `/Name` where the `/` was typed — or at the caret, from Skills' Use. */
+  function pickTemplate(picked: PptxTemplateAssetSummary, range?: { start: number; end: number }) {
+    if (picked.status !== "ready") return;
+    const input = inputRef.current;
+    const latest = latestDraft.current;
+    const caret = input?.selectionStart ?? latest.text.length;
+    const start = range?.start ?? slash?.start ?? caret;
+    const end = range?.end ?? (slash ? caret : (input?.selectionEnd ?? caret));
+    const reference = templateReferenceOf(picked);
+    const next = insertTemplateToken(latest.text, start, end, reference, latest.template ?? null);
+    patchDraft(() => ({ text: next.text, template: reference, mode: "agent" }));
+    setSlash(null);
+    queueMicrotask(() => {
+      input?.focus();
+      input?.setSelectionRange(next.caret, next.caret);
+    });
+  }
+
+  // Skills → Use: the template comes here, to the composer the user came from.
+  useEffect(() => {
+    if (!templatesHere) return;
+    const take = () => {
+      const requested = takeTemplateUse();
+      if (requested) pickTemplate(requested, { start: latestDraft.current.text.length, end: latestDraft.current.text.length });
+    };
+    take();
+    return onTemplateUse(take);
+    // `pickTemplate` reads the latest draft through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesHere]);
 
   function pickMention(option: MentionOption) {
     if (option.kind === "upload-files" || option.kind === "upload-folder") {
@@ -665,6 +764,11 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     if (isImeKeyEvent(event.nativeEvent) || composingRef.current) return;
     if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
     event.preventDefault();
+    // A template with nothing to make from it: say what is missing.
+    if (template && !body && !stopping) {
+      notice(t("dx.composer.templateNeedsTask"));
+      return;
+    }
     void submit();
   }
 
@@ -674,6 +778,13 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
       return;
     }
     if (!canSend) return;
+    // The template is fixed as it is now; one removed or re-learning since it
+    // was chosen is not silently swapped for something else.
+    const chosen = template ? ready.find((entry) => entry.id === template.id) : null;
+    if (template && !chosen) {
+      notice(t("dx.composer.templateGone"));
+      return;
+    }
 
     /*
      * The quote's words are fetched again here, for the message going out:
@@ -695,7 +806,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     }
 
     const submission: ComposerSubmission = {
-      text: text.trim(),
+      text: template ? body : text.trim(),
       folderId: scope?.id ?? "",
       mentions,
       attachments,
@@ -707,6 +818,14 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
       } : {}),
       ...(quoted
         ? { reference: { fileId: quoted.fileId, label: quoted.label, text: quoted.text } }
+        : {}),
+      // A new deck in the template's style (§五): the snapshot as it is now.
+      ...(template && chosen
+        ? {
+            documentType: "pptx" as const,
+            generationMode: "fast" as const,
+            pptxTemplate: { id: chosen.id, version: chosen.version, localAssetDir: chosen.localAssetDir },
+          }
         : {}),
     };
 
@@ -727,6 +846,8 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     setDeclinedTarget(null);
     if (placement === "home") setMode("agent");
     setMentionQuery(null);
+    setTemplate(null);
+    setSlash(null);
     // The quote went with the message; leaving it up would make the next one
     // look like it is about the same passage.
     if (reference) clearSelection();
@@ -1072,6 +1193,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   }
 
   const kind = placement === "home" ? "home" : placement === "floating" ? "dex" : "chat";
+
   /*
    * 1.0.12 UI-17: the button names the configuration runs use — "OfficeDex"
    * unless the user picked another — and follows a switch made anywhere. It is
@@ -1115,6 +1237,24 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
       {reference.text ? <p>{reference.text}</p> : null}
     </div>
   ) : null;
+
+  const input = (
+    <textarea
+      id={inputId}
+      ref={inputRef}
+      rows={2}
+      value={text}
+      data-draft={kind}
+      aria-label={t(kind === "home" ? "dx.composer.ariaHome" : kind === "dex" ? "dx.composer.ariaDex" : "dx.composer.ariaChat")}
+      // 1.0.12 UI-10: Home describes the task; a conversation and Dex both read "与Dex协作".
+      placeholder={t(kind === "home" ? "dx.composer.placeholder" : "dx.composer.placeholderDex")}
+      onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+      onCompositionStart={onCompositionStart}
+      onCompositionEnd={onCompositionEnd}
+      onKeyDown={onInputKeyDown}
+      onScroll={syncMirrorScroll}
+    />
+  );
 
   return (
     <>
@@ -1187,26 +1327,28 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
           </span>
         ) : null}
 
-        <textarea
-          id={inputId}
-          ref={inputRef}
-          rows={2}
-          value={text}
-          data-draft={kind}
-          aria-label={t(
-            kind === "home"
-              ? "dx.composer.ariaHome"
-              : kind === "dex"
-                ? "dx.composer.ariaDex"
-                : "dx.composer.ariaChat",
-          )}
-          // 1.0.12 UI-10: Home describes the task; a conversation and Dex both read "与Dex协作".
-          placeholder={t(kind === "home" ? "dx.composer.placeholder" : "dx.composer.placeholderDex")}
-          onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-          onCompositionStart={onCompositionStart}
-          onCompositionEnd={onCompositionEnd}
-          onKeyDown={onInputKeyDown}
-        />
+        {/*
+          The `/Name` token is text in the textarea; a mirror behind it draws
+          the token's highlight in the same place (1.0.12 §五: inline, not a
+          row of its own). Only where templates are offered.
+        */}
+        {templatesHere ? (
+          <div className="dx-skill-input-wrap">
+            <div className="dx-skill-inline-mirror" aria-hidden="true" ref={mirrorRef}>
+              {mirrorParts ? (
+                <>
+                  {mirrorParts.before}
+                  <mark>{mirrorParts.token}</mark>
+                  {mirrorParts.after}
+                  {"\n"}
+                </>
+              ) : null}
+            </div>
+            {input}
+          </div>
+        ) : (
+          input
+        )}
 
         <div className="dx-composer-tools">
           <div className="dx-composer-tools-start">
@@ -1258,6 +1400,21 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
           onPick={pickMention}
           onClose={() => setMentionQuery(null)}
         />
+        {templatesHere ? (
+          <SlashTemplateMenu
+            open={slash !== null}
+            query={slash?.query ?? ""}
+            templates={ready}
+            selectedId={template?.id ?? null}
+            inputId={inputId}
+            onPick={(picked) => pickTemplate(picked)}
+            onManage={() => {
+              setSlash(null);
+              openSkills(state, dispatch, "ppt-templates");
+            }}
+            onClose={() => setSlash(null)}
+          />
+        ) : null}
         {hiddenInputs}
       </div>
     </>

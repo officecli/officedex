@@ -13,7 +13,7 @@ export function ChatEmpty() {
   const t = useT();
   const { state, dispatch } = useShell();
   return (
-    <section className="dx-page-scroll dx-chat-empty" data-ui-scope="officedex">
+    <section className="dx-page-scroll" data-ui-scope="officedex" data-view="chat-empty">
       <div className="dx-empty">
         <h2>{t("dx.chatEmpty.title")}</h2>
         <p>{t("dx.chatEmpty.body")}</p>

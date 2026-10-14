@@ -91,15 +91,20 @@ const TYPE_SCALE: Record<string, string> = {
 
 /**
  * The design's scale (OD-UI-1.2 §04), copied from `tokens.css` and asserted
- * equal to it below. Ten sizes; 9px is the glyph inside a traffic light and
- * nothing else.
+ * equal to it below. 9px is the glyph inside a traffic light and nothing else;
+ * 7, 10, 11 and 18 came with 1.0.12's PPT template sample drawing and the
+ * Skills layer (see the note in `tokens.css`).
  */
 const DESIGN_SCALE: Record<string, string> = {
+  "--dx-fs-7": "7px",
   "--dx-fs-9": "9px",
+  "--dx-fs-10": "10px",
+  "--dx-fs-11": "11px",
   "--dx-fs-12": "12px",
   "--dx-fs-13": "13px",
   "--dx-fs-14": "14px",
   "--dx-fs-16": "16px",
+  "--dx-fs-18": "18px",
   "--dx-fs-20": "20px",
   "--dx-fs-22": "22px",
   "--dx-fs-24": "24px",

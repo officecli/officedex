@@ -51,7 +51,8 @@ const LAYERS = [
   { source: "v12/workspace.css", file: "workspace-v12.css" },
   { source: "v12/attention-feedback.css", file: "attention.css" },
   { source: "v12/workspace-structure.css", file: "workspace-structure.css" },
-  // 1.0.12: the outer type scale and the resizable sidebar.
+  // 1.0.12: Skills and PPT templates, the outer type scale, the resizable sidebar.
+  { source: "v12/ppt-skills.css", file: "ppt-skills.css" },
   { source: "v12/typography.css", file: "outer-typography.css" },
   { source: "v12/sidebar-resize.css", file: "sidebar-resize.css" },
 ];
@@ -105,6 +106,13 @@ const COLOURS = {
   "#252a30": "--dx-tooltip",
   "#343a40c0": "--dx-play-scrim",
   "#0000003d": "--dx-backdrop",
+  // 1.0.12 PPT template card: the miniature sample deck it draws
+  "#f7f5f0": "--dx-sample-paper",
+  "#29333b": "--dx-sample-ink",
+  "#596f86": "--dx-sample-accent",
+  "#e1e3e5": "--dx-sample-edge",
+  "#c9ced1": "--dx-sample-rule",
+  "#dde2e5": "--dx-sample-block",
   // brand
   "#2b2b2b": "--dx-face-tile",
   "#252525": "--dx-dex-ink",
@@ -138,7 +146,7 @@ const COLOURS = {
 /** macOS traffic lights stay literal by design — see `tokenDiscipline.test.ts`. */
 const LITERAL_BY_DESIGN = new Set(["#ff5f57", "#ffbd2e", "#28c840", "#0001", "#222"]);
 
-const FONT_SIZES = new Set([9, 12, 13, 14, 16, 20, 22, 24, 26, 28]);
+const FONT_SIZES = new Set([7, 9, 10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 26, 28]);
 
 /**
  * `-apple-system, BlinkMacSystemFont, ...` through the trailing generic family.

@@ -30,7 +30,9 @@
 import type { FileMeta } from "../../shared/uiPort";
 import type { PersistedShellState } from "./persist";
 
-export type Page = "home" | "local" | "projects" | "assets" | "editor" | "settings" | "image";
+export type Page = "home" | "local" | "projects" | "assets" | "editor" | "settings" | "image" | "skills";
+/** Skills' two levels (1.0.12 §五): the skill cards, then PPT Templates' own page. */
+export type SkillsSection = "library" | "ppt-templates";
 export type ChatPanel = "chat" | "assets";
 export type ChatPosition = "left" | "right";
 
@@ -146,6 +148,7 @@ export interface ShellState {
   /** The Dex panel over a Local document. */
   dexOpen: boolean;
   settingsSection: SettingsSectionId;
+  skillsSection: SkillsSection;
   avatar: AvatarId;
   theme: "light" | "dark";
   /** Hot and fresh features: shown on Home, and whether its gift button exists yet (§21). */
@@ -166,7 +169,13 @@ export interface ShellState {
 
 export type ShellAction =
   /** Home, Local, Settings or the image creator: leaves any conversation. */
-  | { type: "go"; page: "home" | "local" | "projects" | "settings" | "image"; section?: SettingsSectionId }
+  | {
+      type: "go";
+      page: "home" | "local" | "projects" | "settings" | "image" | "skills";
+      section?: SettingsSectionId;
+      /** Skills only: which level. Absent opens the skill cards. */
+      skills?: SkillsSection;
+    }
   | { type: "open-chat"; chat: ChatRef; name?: string }
   /**
    * Home, writing into a chat that has not been started (1.0.12 §一): the
@@ -256,6 +265,7 @@ export const initialShellState: ShellState = {
   unreadFileIds: [],
   dexOpen: false,
   settingsSection: "general",
+  skillsSection: "library",
   avatar: "ready",
   theme: "light",
   featuresVisible: true,
@@ -332,6 +342,7 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
         dexOpen: false,
         settingsSection:
           action.page === "settings" ? (action.section ?? state.settingsSection) : state.settingsSection,
+        skillsSection: action.page === "skills" ? (action.skills ?? "library") : state.skillsSection,
       };
     }
 
@@ -655,7 +666,7 @@ export function hydrateShellState(persisted: Partial<PersistedShellState>): Shel
   const openFileIds = Array.isArray(persisted.openFileIds) ? persisted.openFileIds.filter((id) => typeof id === "string") : [];
   const tabContexts: Record<string, ChatRef | null> = {};
   for (const fileId of openFileIds) tabContexts[fileId] = chatRefOf(persisted.tabContexts?.[fileId]);
-  const pages: readonly Page[] = ["home", "local", "projects", "assets", "editor", "settings", "image"];
+  const pages: readonly Page[] = ["home", "local", "projects", "assets", "editor", "settings", "image", "skills"];
   const page = pages.includes(persisted.page as Page) ? (persisted.page as Page) : initialShellState.page;
   const chat = chatRefOf(persisted.chat);
   const activeFileId =
