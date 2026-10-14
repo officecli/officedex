@@ -145,6 +145,7 @@ type bridgeCapabilities struct {
 	progressiveJSSDKSupported bool
 	animationJSSDKSupported   bool
 	svgDesignSupported        bool
+	outputTypeClassifier      bool
 }
 
 type listenerEntry struct {
@@ -1039,7 +1040,21 @@ func bridgeCapabilitiesFromPayload(raw []byte) bridgeCapabilities {
 		animationJSSDKSupported:   nestedBool(payload, true, "pptx_jssdk_animation", "v1"),
 		svgDesignSupported:        nestedBool(payload, true, "pptx_svg_design", "v1"),
 		imageWatermarkSupported:   nestedBool(payload, true, "image_generation", "watermark", "supported") || nestedBool(payload, true, "document_generation", "img", "image_generation", "watermark", "supported"),
+		outputTypeClassifier:      advertisesMethod(payload, MethodIntentClassifyOutputType),
 	}
+}
+
+// advertisesMethod reports whether the engine lists method among the ones it
+// answers. The list is read out of the engine's own registry, so a method
+// that is missing here would come back "method not found".
+func advertisesMethod(payload map[string]any, method string) bool {
+	methods, _ := payload["methods"].([]any)
+	for _, item := range methods {
+		if name, _ := item.(string); name == method {
+			return true
+		}
+	}
+	return false
 }
 
 func nestedBool(root map[string]any, want bool, path ...string) bool {
@@ -1207,6 +1222,57 @@ func (c *Client) PlanPptxJS(ctx context.Context, input PlanPptxJSInput) (PlanPpt
 		return PlanPptxJSResult{}, errors.New("bridge: pptx planner returned empty source")
 	}
 	return result, nil
+}
+
+// OutputTypeClassification is the engine's reading of what kind of file a
+// request asks for.
+type OutputTypeClassification struct {
+	DocumentType string  `json:"document_type"`
+	Confidence   float64 `json:"confidence"`
+	Reason       string  `json:"reason,omitempty"`
+}
+
+// ErrOutputTypeClassifierUnavailable means the running engine predates the
+// classifier. Callers route the request the way they did before it existed.
+var ErrOutputTypeClassifierUnavailable = errors.New("bridge: this officecli has no output type classifier")
+
+// DefaultOutputTypeClassifyTimeout bounds a question that stands between the
+// user pressing send and the run starting. A late answer is worth nothing;
+// the caller's own routing takes over instead.
+const DefaultOutputTypeClassifyTimeout = 6 * time.Second
+
+// ClassifyOutputType calls MethodIntentClassifyOutputType.
+func (c *Client) ClassifyOutputType(ctx context.Context, prompt string) (OutputTypeClassification, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return OutputTypeClassification{}, errors.New("bridge: output type classifier prompt is empty")
+	}
+	if !c.supportsOutputTypeClassifier(ctx) {
+		return OutputTypeClassification{}, ErrOutputTypeClassifierUnavailable
+	}
+	raw, err := c.requestWithTimeout(ctx, MethodIntentClassifyOutputType, map[string]any{"prompt": prompt}, DefaultOutputTypeClassifyTimeout)
+	if err != nil {
+		return OutputTypeClassification{}, err
+	}
+	var result OutputTypeClassification
+	if err := decodeJSON(raw, &result); err != nil {
+		return OutputTypeClassification{}, fmt.Errorf("bridge: decode %s: %w", MethodIntentClassifyOutputType, err)
+	}
+	return result, nil
+}
+
+func (c *Client) supportsOutputTypeClassifier(ctx context.Context) bool {
+	c.mu.Lock()
+	caps := c.capabilities
+	c.mu.Unlock()
+	if !caps.loaded {
+		raw, err := c.GetCapabilities(ctx)
+		if err != nil {
+			return false
+		}
+		caps = bridgeCapabilitiesFromPayload(raw)
+	}
+	return caps.outputTypeClassifier
 }
 
 func (c *Client) AnalyzePptxTemplate(ctx context.Context, facts json.RawMessage) (json.RawMessage, error) {

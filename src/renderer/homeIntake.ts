@@ -133,7 +133,32 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
   const unsupportedFallback = unsupportedOutputFormat(prompt);
   if (unsupportedFallback) return { kind: "unsupported_format", format: unsupportedFallback };
 
-  return { kind: "generate", documentType: fallback, sourceFile };
+  /*
+   * Nothing in the words named a type, so the settings default decides — but
+   * a picture is never what silence means. With the default left on image,
+   * 「给我详细介绍一下绝区零的剧情」 went out as an image run: the user asked
+   * to be told something and was drawn a poster. An image is only made when it
+   * is asked for, by the composer's image mode or by the words; a default of
+   * image (or GIF) falls back to a document instead.
+   */
+  const silent = fallback === "img" || fallback === "gif" ? "docx" : fallback;
+  return { kind: "generate", documentType: silent, sourceFile };
+}
+
+/**
+ * Whether nothing about a request says what kind of file to make.
+ *
+ * `inferHomeTaskRoute` answers with its fallback when the composer, a
+ * template, a file name and every keyword have all had nothing to say, and
+ * its result does not record that it did. Asking twice with two fallbacks
+ * does: an answer that follows the fallback was never read off the request.
+ * A refusal, a cleanup and a request for a source file are all decisions, so
+ * none of them counts as unstated.
+ */
+export function outputTypeIsUnstated(input: HomeTaskIntake): boolean {
+  const asDocument = inferHomeTaskRoute(input, "docx");
+  const asSlides = inferHomeTaskRoute(input, "pptx");
+  return asDocument.kind === "generate" && asSlides.kind === "generate" && asDocument.documentType !== asSlides.documentType;
 }
 
 /**

@@ -15,7 +15,8 @@ import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { errorMessage } from "../renderer/utils/values";
 import { taskTitle } from "../renderer/taskTitle";
-import { inferHomeTaskRoute, outputFileStem, requestedFileName, requestsNewFile } from "../renderer/homeIntake";
+import { inferHomeTaskRoute, outputFileStem, outputTypeIsUnstated, requestedFileName, requestsNewFile } from "../renderer/homeIntake";
+import { classifyOutputType } from "./outputTypeClassifier";
 import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
 import { translate } from "../renderer/i18n";
@@ -1615,6 +1616,12 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * deck with it is the "unknown sentinel target" failure. The route is
        * asked with the made file's own type as its fallback, so a type that
        * comes back different was read off the words.
+       *
+       * This stays on keywords, and is not put to the classifier. The
+       * question here is whether the words *name* another kind of file, and
+       * only a named kind may take a follow-up away from the file it is
+       * about: 「再短一点」 names nothing, and a model's best guess at its
+       * type would start a new document that knows nothing of the old one.
        */
       const madeType = (record?.documentType.trim().toLowerCase() ?? "") as GenerateInput["documentType"];
       const route = record ? inferHomeTaskRoute({ prompt: text }, madeType) : undefined;
@@ -1638,10 +1645,31 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * keywords, so it goes in as `input.documentType` and comes back out of
      * the route unchanged.
      */
-    const route = inferHomeTaskRoute(
-      { prompt: text, templateId: input.pptxTemplate?.id, ...(input.documentType ? { documentType: input.documentType } : {}) },
-      settings.defaults.documentType,
-    );
+    const intake = { prompt: text, templateId: input.pptxTemplate?.id, ...(input.documentType ? { documentType: input.documentType } : {}) };
+    let route = inferHomeTaskRoute(intake, settings.defaults.documentType);
+    /*
+     * Nothing said what to make, so ask rather than assume.
+     *
+     * The settings default used to answer here on its own, and it knows
+     * nothing about the request: 「给我详细介绍一下绝区零的剧情」 became
+     * whatever the default happened to be. The engine's classifier reads the
+     * request instead. It is asked only when the composer, a template, a file
+     * name and every keyword were all silent — a stated type is never put to
+     * a model — and any way it can fail leaves the route above as it was.
+     */
+    if (route.kind === "generate" && outputTypeIsUnstated(intake)) {
+      const classified = await classifyOutputType(api, text);
+      // The only record of why a request became the type it did; a packaged
+      // build has no console. Never worth failing a send over.
+      try {
+        void api.recordRendererLog({
+          source: "agent",
+          event: "agent.routing.outputType",
+          details: { fallback: route.documentType, ...classified },
+        }).catch(() => {});
+      } catch { /* a host without the log still sends */ }
+      if (classified.documentType) route = { ...route, documentType: classified.documentType };
+    }
     if (route.kind === "needs_source") {
       throw new Error(translate("shell.service.needsSource"));
     }

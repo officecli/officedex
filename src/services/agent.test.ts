@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BridgeEvent, DesktopAPI, DocumentRecord, GenerateInput, ModifyInput } from "../shared/types";
 import type { AgentEvent, AgentTask, SendInput } from "../shared/uiPort";
 import { createAgentService, inputFileOf, referencedFileIds, replaceInputFile, requestsFormatChoice, reviewRequestedBy } from "./agent";
+import { OUTPUT_TYPE_TIMEOUT_MS } from "./outputTypeClassifier";
 
 interface Scripted {
   api: DesktopAPI;
@@ -23,7 +24,7 @@ interface Scripted {
   addDocument: (record: Partial<DocumentRecord> & Pick<DocumentRecord, "id" | "filePath" | "documentType">) => DocumentRecord;
 }
 
-function scripted(startSerial = 0): Scripted {
+function scripted(startSerial = 0, defaultType = "pptx"): Scripted {
   const listeners: Array<(event: BridgeEvent) => void> = [];
   const documents = new Map<string, DocumentRecord>();
   const calls: Scripted["calls"] = { generate: [], modify: [], cancel: [] };
@@ -37,7 +38,7 @@ function scripted(startSerial = 0): Scripted {
       return [];
     },
     async getSettings() {
-      return { defaults: { documentType: "pptx", enableImages: false, enableWebSearch: false, imageQuality: "standard" } };
+      return { defaults: { documentType: defaultType, enableImages: false, enableWebSearch: false, imageQuality: "standard" } };
     },
     async getDocument(id: string) {
       const record = documents.get(id);
@@ -346,6 +347,135 @@ describe("F02 — review before the change lands", () => {
     for (const text of ["Write a review of the product", "审阅意见已经收到，按它改", "apply the changes"]) {
       expect(reviewRequestedBy(text), text).toBe(false);
     }
+  });
+});
+
+describe("what silence about the type means", () => {
+  it("writes a document, not a picture, when the default is image and no type was named", async () => {
+    for (const prompt of ["给我详细介绍一下绝区零的剧情", "我想要入坑绝区零，给我写一份入坑攻略"]) {
+      const desk = scripted(0, "img");
+      const service = createAgentService(desk.api);
+
+      await service.send(message(prompt, { newConversation: true }));
+      expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+    }
+  });
+
+  it("still makes the picture the words or the composer ask for", async () => {
+    const desk = scripted(0, "img");
+    const service = createAgentService(desk.api);
+
+    await service.send(message("画一张赛博朋克风格的海报", { newConversation: true }));
+    await service.send(message("做一个季度复盘的 PPT", { newConversation: true }));
+    await service.send(message("给我详细介绍一下绝区零的剧情", { newConversation: true, documentType: "img" }));
+    expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["img", "pptx", "img"]);
+  });
+});
+
+describe("asking the engine what an unstated request wants", () => {
+  const ZZZ = ["给我详细介绍一下绝区零的剧情", "我想要入坑绝区零，给我写一份入坑攻略"];
+  const answering = (documentType: string, confidence = 0.9) =>
+    vi.fn(async () => ({ available: true, documentType, confidence }));
+
+  it("makes what the engine reads off the request, whatever the default is", async () => {
+    for (const prompt of ZZZ) {
+      const desk = scripted(0, "img");
+      desk.api.classifyOutputType = answering("docx");
+      const service = createAgentService(desk.api);
+
+      await service.send(message(prompt, { newConversation: true }));
+      expect(desk.api.classifyOutputType).toHaveBeenCalledWith(prompt);
+      expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+    }
+  });
+
+  it("lets the engine pick a type no keyword names", async () => {
+    const desk = scripted(0, "docx");
+    desk.api.classifyOutputType = answering("xlsx");
+    const service = createAgentService(desk.api);
+
+    await service.send(message("帮我排一下下周的值班", { newConversation: true }));
+    expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["xlsx"]);
+  });
+
+  it("never asks about a type the user stated", async () => {
+    const desk = scripted(0, "docx");
+    desk.api.classifyOutputType = answering("docx");
+    const service = createAgentService(desk.api);
+
+    await service.send(message("画一张赛博朋克风格的海报", { newConversation: true }));
+    await service.send(message("做一个季度复盘的 PPT", { newConversation: true }));
+    await service.send(message(ZZZ[0], { newConversation: true, documentType: "img" }));
+    await service.send(message(ZZZ[0], { newConversation: true, documentType: "pptx" }));
+    expect(desk.api.classifyOutputType).not.toHaveBeenCalled();
+    expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["img", "pptx", "img", "pptx"]);
+  });
+
+  it("does not ask before refusing a format it cannot make", async () => {
+    const desk = scripted();
+    desk.api.classifyOutputType = answering("docx");
+    const service = createAgentService(desk.api);
+
+    await expect(service.send(message("把这些要点存成一个 txt 文件", { newConversation: true }))).rejects.toThrow(/TXT/);
+    expect(desk.api.classifyOutputType).not.toHaveBeenCalled();
+  });
+
+  describe("when there is no answer, routes as it did before the classifier", () => {
+    const cases: Array<[string, DesktopAPI["classifyOutputType"]]> = [
+      ["the call fails", async () => { throw new Error("offline"); }],
+      ["the engine predates the classifier", async () => ({ available: false, documentType: "", confidence: 0 })],
+      ["the engine is not sure", async () => ({ available: true, documentType: "img", confidence: 0.3 })],
+      ["the engine names a type this path does not make", async () => ({ available: true, documentType: "report", confidence: 0.9 })],
+    ];
+    for (const [name, classify] of cases) {
+      it(name, async () => {
+        const silent = scripted(0, "xlsx");
+        silent.api.classifyOutputType = classify;
+        await createAgentService(silent.api).send(message(ZZZ[0], { newConversation: true }));
+        expect(silent.calls.generate.map((call) => call.documentType)).toEqual(["xlsx"]);
+
+        // …and a default of image is still not what silence means.
+        const picture = scripted(0, "img");
+        picture.api.classifyOutputType = classify;
+        await createAgentService(picture.api).send(message(ZZZ[1], { newConversation: true }));
+        expect(picture.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+      });
+    }
+
+    it("the desktop host predates the classifier", async () => {
+      const desk = scripted(0, "img");
+      expect(desk.api.classifyOutputType).toBeUndefined();
+
+      await createAgentService(desk.api).send(message(ZZZ[0], { newConversation: true }));
+      expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+    });
+
+    it("the answer is too slow", async () => {
+      vi.useFakeTimers();
+      try {
+        const desk = scripted(0, "img");
+        desk.api.classifyOutputType = vi.fn(() => new Promise<never>(() => {}));
+        const sent = createAgentService(desk.api).send(message(ZZZ[0], { newConversation: true }));
+
+        await vi.advanceTimersByTimeAsync(OUTPUT_TYPE_TIMEOUT_MS - 1);
+        expect(desk.calls.generate).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(1);
+        await sent;
+        expect(desk.calls.generate.map((call) => call.documentType)).toEqual(["docx"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("keeps a follow-up on the file it is about without asking", async () => {
+    const desk = scripted();
+    desk.api.classifyOutputType = answering("docx");
+    const { service, deck } = await conversationWithDeck(desk);
+
+    await service.send(message("再短一点"));
+    expect(desk.api.classifyOutputType).not.toHaveBeenCalled();
+    expect(desk.calls.modify.map((call) => call.sourceFile)).toEqual([deck.filePath]);
   });
 });
 
