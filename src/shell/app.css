@@ -14,7 +14,8 @@
   overflow: hidden;
   background: var(--dx-canvas);
   color: var(--dx-text);
-  font: 400 var(--dx-fs-14) / 20px var(--dx-font);
+  font: 400 var(--dx-fs-13) / 20px var(--dx-font);
+  letter-spacing: 0;
   font-synthesis: none;
   color-scheme: light;
 }

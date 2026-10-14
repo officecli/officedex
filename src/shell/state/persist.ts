@@ -27,6 +27,8 @@ export interface PersistedShellState {
   chatPosition: ChatPosition;
   chatWidth: number;
   navCollapsed: boolean;
+  /** The expanded sidebar's width (1.0.12). Older saves have none: 244. */
+  navWidth?: number;
   expandedFolderIds: string[];
   openFileIds: string[];
   activeFileId: string | null;

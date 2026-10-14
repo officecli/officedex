@@ -393,7 +393,7 @@
   height: 36px;
   min-height: 36px;
   padding: 7px 32px 7px 12px;
-  font: var(--dx-type-ui);
+  font: var(--dx-type-body);
   color: var(--dx-text);
   cursor: pointer;
 }

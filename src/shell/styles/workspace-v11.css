@@ -1992,3 +1992,18 @@ td.dx-name-col {
 .dx-table-wrap table {
   min-width: 600px;
 }
+
+/* Input glow removed (2026-10-14). Retain static focus visibility without a halo. */
+
+[data-ui-scope="officedex"] input:focus,
+[data-ui-scope="officedex"] textarea:focus,
+[data-ui-scope="officedex"] select:focus,
+[data-ui-scope="officedex"] .dx-search:focus-within {
+  box-shadow: none;
+}
+
+#dx-workspace .dx-composer:focus-within {
+  outline: none;
+  box-shadow: 0 2px 8px var(--dx-shade-03);
+  border-color: var(--dx-control);
+}

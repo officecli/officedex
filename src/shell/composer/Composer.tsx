@@ -96,6 +96,9 @@ const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "a
  * behind it: the message still looked like it carried the file and silently
  * did not, and the attachments were gone without even a chip left to notice.
  */
+/** What the model button says when no configuration is picked: the official one's name. */
+const OFFICIAL_MODEL_NAME = "OfficeDex";
+
 const drafts = new Map<string, Draft>();
 
 /**
@@ -217,9 +220,9 @@ export interface ComposerProps {
  * input beside a running task turns Send into Stop in the same 32px circle.
  *
  * Container 24px radius with 8px padding; the text sits 4px further in. The
- * text box grows from 56 to 200px and then scrolls. The focus ring is the
- * container's — the 1.0 colour glow, drawn by `attention/inputGlow` — and the
- * textarea inside has no outline of its own.
+ * text box grows from 56 to 200px and then scrolls. Focus shows as the
+ * container's neutral border; there is no colour glow or halo (1.0.12 UI-09),
+ * and the textarea inside has no outline of its own.
  *
  * The image creator keeps the interface it already had (§18: "AI image 保留
  * 既有图像创作界面"); that branch of this component is unchanged.
@@ -1059,6 +1062,13 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   }
 
   const kind = placement === "home" ? "home" : placement === "floating" ? "dex" : "chat";
+  /*
+   * 1.0.12 UI-17: the button names the configuration runs use — "OfficeDex"
+   * unless the user picked another — and follows a switch made anywhere. It is
+   * the configuration's display name, not a claim about the model underneath.
+   */
+  const modelName =
+    settings.models.find((model) => model.id === settings.value.selectedModelId)?.name || OFFICIAL_MODEL_NAME;
 
   /*
    * What "this" refers to: the passage selected in the document, with its
@@ -1180,7 +1190,8 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
                 ? "dx.composer.ariaDex"
                 : "dx.composer.ariaChat",
           )}
-          placeholder={t("dx.composer.placeholder")}
+          // 1.0.12 UI-10: Home describes the task; a conversation and Dex both read "与Dex协作".
+          placeholder={t(kind === "home" ? "dx.composer.placeholder" : "dx.composer.placeholderDex")}
           onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
           onCompositionStart={onCompositionStart}
           onCompositionEnd={onCompositionEnd}
@@ -1205,11 +1216,12 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
               type="button"
               className="dx-model-button"
               data-act="model-picker"
-              aria-label={t("dx.composer.model")}
-              title={t("dx.composer.chooseModel")}
+              aria-label={t("dx.composer.chooseModelNamed", { name: modelName })}
+              aria-haspopup="menu"
+              title={modelName}
               onClick={(event) => chooseModel(event.currentTarget)}
             >
-              <span className="dx-ellipsis">{t("dx.composer.model")}</span>
+              <span className="dx-ellipsis">{modelName}</span>
               <Icon name="ChevronDown" />
             </button>
             <button

@@ -38,7 +38,7 @@
 
 .shell-ig-popover > header > strong {
   font-size: var(--shell-text-md);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--shell-ink-title);
 }
 

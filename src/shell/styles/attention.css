@@ -8,26 +8,6 @@
 
 /* The color/stroke/motion recipe lives unchanged in companion-attention.js (1.0). */
 
-.dx-od-input-glow {
-  position: fixed;
-  pointer-events: none;
-  z-index: var(--dx-z-input-glow);
-  overflow: visible;
-}
-
-.dx-od-color-focus {
-  outline: none!important;
-  box-shadow: none!important;
-}
-
-.dx-composer.dx-od-color-focus:focus-within,
-.dx-input-shell.dx-od-color-focus:focus-within,
-.dx-search-box.dx-od-color-focus:focus-within,
-.dx-search.dx-od-color-focus:focus-within {
-  outline: none!important;
-  box-shadow: none!important;
-}
-
 .dx-od-agent-effects {
   position: fixed;
   inset: 0;

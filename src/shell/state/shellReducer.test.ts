@@ -7,6 +7,8 @@ import {
   CHAT_MIN_WIDTH,
   hydrateShellState,
   initialShellState,
+  NAV_WIDTH,
+  navMaxWidth,
   sameChat,
   shellReducer,
   showsEditor,
@@ -512,5 +514,64 @@ describe("sameChat", () => {
     expect(sameChat(PLAN, SALES)).toBe(false);
     expect(sameChat(null, null)).toBe(true);
     expect(sameChat(PLAN, null)).toBe(false);
+  });
+});
+
+// 1.0.12 UI-03: the sidebar's width and its hide threshold.
+describe("resizing the sidebar", () => {
+  it("widens up to 480 and never narrows an expanded sidebar below 244", () => {
+    expect(run(initialShellState, { type: "resize-nav", width: 360 }).navWidth).toBe(360);
+    expect(run(initialShellState, { type: "resize-nav", width: 900 }).navWidth).toBe(480);
+    const narrow = run(initialShellState, { type: "resize-nav", width: 200 });
+    expect(narrow.navWidth).toBe(NAV_WIDTH);
+    expect(narrow.navCollapsed).toBe(false);
+  });
+
+  it("hides the sidebar below 180 and keeps the width it had", () => {
+    const wide = run(initialShellState, { type: "resize-nav", width: 320 });
+    const hidden = run(wide, { type: "resize-nav", width: 179 });
+    expect(hidden.navCollapsed).toBe(true);
+    expect(hidden.navWidth).toBe(320);
+    // Showing it again brings back that width.
+    expect(run(hidden, { type: "toggle-nav" })).toMatchObject({ navCollapsed: false, navWidth: 320 });
+  });
+
+  it("drags a hidden sidebar back out once the request reaches 180", () => {
+    const hidden = run(initialShellState, { type: "toggle-nav" });
+    expect(run(hidden, { type: "resize-nav", width: 120 }).navCollapsed).toBe(true);
+    expect(run(hidden, { type: "resize-nav", width: 190 })).toMatchObject({ navCollapsed: false, navWidth: NAV_WIDTH });
+  });
+
+  it("leaves the content region at least 520px when the window has room", () => {
+    expect(navMaxWidth(1440)).toBe(480);
+    expect(navMaxWidth(900)).toBe(380);
+    // A narrow window keeps its breakpoints rather than a squeezed sidebar.
+    expect(navMaxWidth(600)).toBe(NAV_WIDTH);
+    expect(run(initialShellState, { type: "resize-nav", width: 460, max: navMaxWidth(900) }).navWidth).toBe(380);
+  });
+
+  it("comes back at the width a hiding drag started from", () => {
+    const wide = run(initialShellState, { type: "resize-nav", width: 380 });
+    const passing = run(wide, { type: "resize-nav", width: 270 }, { type: "resize-nav", width: 150 });
+    expect(passing).toMatchObject({ navCollapsed: true, navWidth: 270 });
+    expect(run(passing, { type: "finish-nav-drag", startWidth: 380 })).toMatchObject({ navCollapsed: true, navWidth: 380 });
+    // A drag that ends expanded keeps where it ended.
+    expect(run(wide, { type: "resize-nav", width: 300 }, { type: "finish-nav-drag", startWidth: 380 }).navWidth).toBe(300);
+  });
+
+  it("puts a cancelled drag back where it started", () => {
+    const dragged = run(initialShellState, { type: "resize-nav", width: 400 }, { type: "resize-nav", width: 100 });
+    expect(run(dragged, { type: "restore-nav", width: NAV_WIDTH, collapsed: false })).toMatchObject({
+      navCollapsed: false,
+      navWidth: NAV_WIDTH,
+    });
+  });
+
+  it("survives a relaunch, and a save from before 1.0.12 opens at 244", () => {
+    const wide = run(initialShellState, { type: "resize-nav", width: 333 });
+    expect(hydrateShellState(toPersisted(wide)).navWidth).toBe(333);
+    const { navWidth: _dropped, ...old } = toPersisted(initialShellState);
+    expect(hydrateShellState(old).navWidth).toBe(NAV_WIDTH);
+    expect(hydrateShellState({ ...old, navWidth: Number.NaN }).navWidth).toBe(NAV_WIDTH);
   });
 });

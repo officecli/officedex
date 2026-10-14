@@ -161,7 +161,8 @@ export function ConversationPane() {
           data-act="toggle-chat-display"
           onClick={() => dispatch({ type: "toggle-chat-display" })}
         >
-          <Icon name="Maximize2" />
+          {/* 1.0.12 UI-12: four corners to float, two stacked windows to dock again. */}
+          <Icon name={state.chatFloating ? "WindowRestore" : "WindowMaximize"} />
         </button>
       </div>
 

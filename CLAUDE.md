@@ -2,14 +2,15 @@
 
 ## UI/UX 设计基准
 
-**唯一基准是 OD-UI-1.2 r10**：交互原型 `OfficeDex-Interactive-Prototype-1.2-r10.html` 与规范
-`OfficeDex-Interaction-Design-Standard-1.2-r10.html`（当前在 `~/Documents/officedex/交互原型/`）。
-任何与它冲突的文档、注释、色值一律以它为准。范围是**浅色主题**；深色、高对比度规范里明确不在本轮验收内。
+**当前基准是 OfficeDex 1.0.12 研发交接包（2026-10-14）**：`OfficeDex-1.0.12-研发增量修改清单-20261014.md`、
+交互原型 `OfficeDex-Interactive-Prototype-1.0.12.html` 与规范 `OfficeDex-Interaction-Design-Standard-1.0.12.html`。
+它是 OD-UI-1.2 r10 之上的增量；清单与 r10 冲突处以清单为准（例如项目内新增不再直接进空白 Chat、
+不再显示 This Mac / Input settings / Chat 输入区的 Unfiled）。1.0.12 是设计编号，不是客户端版本号。范围是**浅色主题**；深色、高对比度规范里明确不在本轮验收内。
 
 ### 样式从哪来
 
-- `src/shell/styles/workspace-v11.css`、`workspace-v12.css`、`attention.css`、`workspace-structure.css`
-  是**生成物**，由 `scripts/port-prototype-styles.mjs` 从原型内嵌样式逐层移植（保留层叠顺序），**不要手改**。
+- `src/shell/styles/workspace-v11.css`、`workspace-v12.css`、`attention.css`、`workspace-structure.css`、
+  `outer-typography.css`、`sidebar-resize.css` 是**生成物**，由 `scripts/port-prototype-styles.mjs` 从原型内嵌样式逐层移植（保留层叠顺序），**不要手改**。
   原型出新版本时重跑：
   `node scripts/port-prototype-styles.mjs "<原型 html 路径>"`。
   生成器遇到没有令牌的色值、不在字号表里的字号会直接报错——先扩 `tokens.css` 再重跑。

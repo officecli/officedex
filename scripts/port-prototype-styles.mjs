@@ -51,6 +51,9 @@ const LAYERS = [
   { source: "v12/workspace.css", file: "workspace-v12.css" },
   { source: "v12/attention-feedback.css", file: "attention.css" },
   { source: "v12/workspace-structure.css", file: "workspace-structure.css" },
+  // 1.0.12: the outer type scale and the resizable sidebar.
+  { source: "v12/typography.css", file: "outer-typography.css" },
+  { source: "v12/sidebar-resize.css", file: "sidebar-resize.css" },
 ];
 
 /* ------------------------------------------------------------------ tokens */
@@ -92,6 +95,8 @@ const COLOURS = {
   // surfaces
   "#f7f7f6": "--dx-sidebar",
   "#eef0f3": "--dx-chrome",
+  // 1.0.12 placeholder ink: lighter than muted, never by fading the field
+  "#929ba4": "--dx-placeholder",
   "#e3e6eb": "--dx-home-tab",
   "#edf0f3": "--dx-home-tab-hover",
   "#f5f5f5": "--dx-card-preview",
@@ -123,6 +128,7 @@ const COLOURS = {
   // dark theme (tokens.css swaps the semantic block; these are the one-offs)
   "#20252a": "--dx-dark-on-primary",
   "#24272c": "--dx-dark-chrome",
+  "#84909b": "--dx-dark-placeholder",
   "#343840": "--dx-dark-home-tab",
   "#4b515a": "--dx-dark-home-tab-selected",
   "#d1d8de": "--dx-dark-primary-hover",
@@ -159,6 +165,7 @@ function zToken(value, selector) {
     35: "--dx-z-workspace-toggle",
     40: s.includes("drop-active") ? "--dx-z-drop" : "--dx-z-sidebar-peek",
     45: s.includes("feature-flyout") ? "--dx-z-flyout" : "--dx-z-global-controls",
+    46: "--dx-z-sidebar-resizer",
     60: "--dx-z-menu",
     70: "--dx-z-popover",
     90: "--dx-z-tooltip",
@@ -193,7 +200,16 @@ const CUSTOM_PROPERTIES = new Set([
   "composer-icon",
   "dex-panel-x",
   "dex-panel-y",
+  "titlebar",
+  "sidebar-width",
 ]);
+
+/**
+ * Prototype custom properties that already have a shell token. Their
+ * declarations are dropped and their uses point at the token: 1.0.12's
+ * `--od-font-ui` is the same system stack as `--dx-font`.
+ */
+const ALIASED_PROPERTIES = { "od-font-ui": "--dx-font" };
 
 /* --------------------------------------------------------------- selectors */
 
@@ -236,7 +252,7 @@ function rewriteSelector(selector) {
   // The document root and <body> are the shell's own root element.
   out = out.replace(/^:root\b/, "#shell").replace(/^body(?=[.\[:\s]|$)/, "#shell");
   // Classes the prototype toggles on <body>.
-  out = out.replace(/^\.dx-(resizing|reduced)\b/, "#shell.dx-$1");
+  out = out.replace(/^\.dx-(resizing|sidebar-resizing|reduced)\b/, "#shell.dx-$1");
 
   const named = /(\.dx-|#dx-|#shell)/.test(out) || out.startsWith("[data-ui-scope");
   if (!named) {
@@ -259,7 +275,7 @@ function rewriteValue(decl, selector) {
   let value = decl.value;
 
   value = value.replace(/var\(--([\w-]+)/g, (match, name) =>
-    CUSTOM_PROPERTIES.has(name) ? `var(--dx-${name}` : match,
+    ALIASED_PROPERTIES[name] ? `var(${ALIASED_PROPERTIES[name]}` : CUSTOM_PROPERTIES.has(name) ? `var(--dx-${name}` : match,
   );
 
   value = value.replace(COLOUR_PATTERN, (literal) => {
@@ -344,6 +360,10 @@ function port(css, name) {
     const selectorText = kept.join(", ");
     rule.selectors = kept.map(rewriteSelector);
     rule.walkDecls((decl) => {
+      if (decl.prop.startsWith("--") && ALIASED_PROPERTIES[decl.prop.slice(2)]) {
+        decl.remove();
+        return;
+      }
       if (decl.prop.startsWith("--")) {
         const name = decl.prop.slice(2);
         if (CUSTOM_PROPERTIES.has(name)) decl.prop = `--dx-${name}`;

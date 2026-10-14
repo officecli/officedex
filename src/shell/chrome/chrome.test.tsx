@@ -227,13 +227,12 @@ describe("the document tabs", () => {
     const view = await shell();
     await view.dispatch({ type: "open-local-file", fileId: "brief" });
     expect(tab(view, "brief")?.dataset.context).toBe("local");
-    expect(tab(view, "brief")?.querySelector(".dx-tab-dex-watermark")).toBeNull();
 
     await openLaunchChat(view);
     await view.dispatch({ type: "open-file", fileId: "doc" });
     expect(tab(view, "doc")?.dataset.context).toBe("chat");
-    // The watermark is what says a tab belongs to a conversation.
-    expect(tab(view, "doc")?.querySelector(".dx-tab-dex-watermark")).not.toBeNull();
+    // 1.0.12 UI-13: the context is data, not a Dex watermark.
+    expect(view.find(".dx-tab-dex-watermark")).toBeNull();
     expect(tab(view, "brief")?.dataset.context).toBe("local");
   });
 

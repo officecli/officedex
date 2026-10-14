@@ -36,10 +36,10 @@
 .shell-hero h1 {
   margin: 0;
   color: var(--shell-ink);
-  font-size: var(--shell-text-display);
-  line-height: 1.25;
-  font-weight: 550;
-  letter-spacing: -1.1px;
+  font-size: var(--dx-fs-24);
+  line-height: 32px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .shell-hero-lede {

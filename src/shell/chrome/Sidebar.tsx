@@ -39,8 +39,9 @@ export function avatarUrl(id: AvatarId): string {
  * glyph is the disclosure, there is no chevron — and its management lives in
  * the "more" button. Files never appear in this tree.
  *
- * Fixed at 244px. Hidden means 0px and no rail: `peek` is the temporary reveal
- * while the pointer rests on the switch or on the sidebar itself.
+ * 244px by default, dragged out to 480 from its edge (`SidebarResizer`, 1.0.12
+ * UI-03). Hidden means 0px and no rail: `peek` is the temporary reveal while
+ * the pointer rests on the switch or on the sidebar itself.
  */
 export function Sidebar({
   account,

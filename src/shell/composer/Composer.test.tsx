@@ -464,15 +464,24 @@ describe("attachments", () => {
  *
  * It is the workspace preference `selectedModelId` that does it — `useAgentTask`
  * reads it for every message — so the assertions follow the id onto the message
- * rather than onto a label. The button says only "Model"; the menu is where the
- * choice shows.
+ * rather than onto a label. Since 1.0.12 (UI-17) the button also names the
+ * configuration in use, and follows a switch.
  */
 describe("model choice", () => {
+  it("names the configuration in use on the button, and follows a switch", async () => {
+    const shell = await conversation();
+    expect(modelButton(shell)).toHaveTextContent("GPT-6 Astra");
+    await press(modelButton(shell));
+    await press(within(shell.view.getByRole("menu")).getByRole("menuitemradio", { name: /GPT-5\.6 Sol/ }));
+    await waitFor(() => expect(modelButton(shell)).toHaveTextContent("GPT-5.6 Sol"));
+    expect(modelButton(shell)).toHaveAttribute("title", "GPT-5.6 Sol");
+  });
+
   it("lists the models and sends the one that was picked", async () => {
     const shell = await conversation();
     const sent = watchSends(shell);
 
-    await press(shell.view.getByTitle("Choose model"));
+    await press(modelButton(shell));
     const menu = shell.view.getByRole("menu");
     expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(4);
     expect(within(menu).getByRole("menuitemradio", { name: /GPT-6 Astra/ })).toHaveAttribute(
@@ -499,7 +508,7 @@ describe("model choice", () => {
     };
 
     await type(chatInput(shell), "Tidy the deck.");
-    await press(shell.view.getByTitle("Choose model"));
+    await press(modelButton(shell));
     await press(shell.view.getByRole("menuitemradio", { name: /^K3/ }));
 
     await waitFor(() => expect(notice()).toContain("Switching models is not wired up yet."));
@@ -508,7 +517,7 @@ describe("model choice", () => {
 
     // And a menu claiming a model no run will use is the same lie as a switch
     // that changed nothing, so it goes back.
-    await press(shell.view.getByTitle("Choose model"));
+    await press(modelButton(shell));
     expect(shell.view.getByRole("menuitemradio", { name: /GPT-6 Astra/ })).toHaveAttribute(
       "aria-checked",
       "true",
@@ -546,7 +555,7 @@ describe("model choice", () => {
         selected.push(id);
         return select(id);
       };
-      await press(shell.view.getByTitle("Choose model"));
+      await press(modelButton(shell));
       await press(shell.view.getByRole("menuitemradio", { name: /^OfficeDex/ }));
       return selected;
     }
@@ -575,7 +584,7 @@ describe("model choice", () => {
       await press(within(shell.view.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
 
       expect(selected).toEqual([]);
-      await press(shell.view.getByTitle("Choose model"));
+      await press(modelButton(shell));
       expect(shell.view.getByRole("menuitemradio", { name: /gpt-6-astra/ })).toHaveAttribute(
         "aria-checked",
         "true",
@@ -584,7 +593,7 @@ describe("model choice", () => {
 
     it("does not ask about the model already in use", async () => {
       const shell = await conversation(SEED_FOLDER_ID, single());
-      await press(shell.view.getByTitle("Choose model"));
+      await press(modelButton(shell));
       await press(shell.view.getByRole("menuitemradio", { name: /gpt-6-astra/ }));
 
       expect(shell.view.queryByRole("dialog")).toBeNull();
@@ -945,3 +954,7 @@ describe("the image creator", () => {
     expect(sent[0].activeFileId).toBeNull();
   });
 });
+
+function modelButton(shell: { view: { getByRole: (role: "button", options: { name: RegExp }) => HTMLElement } }): HTMLElement {
+  return shell.view.getByRole("button", { name: /^Choose model: / });
+}

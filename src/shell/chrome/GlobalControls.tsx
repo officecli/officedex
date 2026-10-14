@@ -11,9 +11,11 @@ import { useShell } from "../state/ShellContext";
  * The window's top-left corner: traffic lights → sidebar switch → the Logo
  * Home tab (WORKSPACE-STANDARD §02).
  *
- * 244 × 40 and independent of the sidebar's body: the band stays exactly where
- * it is when the sidebar is hidden, which is what makes the Logo tab permanent
- * rather than a sidebar item. The Home tab is not a document tab — it is never
+ * 40px tall and as wide as the expanded sidebar; the traffic lights stay at
+ * the left and the switch and the Logo tab ride its right edge (1.0.12 UI-04).
+ * It does not go when the sidebar is hidden, which is what makes the Logo tab
+ * permanent rather than a sidebar item. The Logo tab is transparent at rest,
+ * on Home included; only hover shows it is a button (UI-05). The Home tab is not a document tab — it is never
  * closed, never dragged and does not count among the open files.
  *
  * `onPeek` / `onPeekEnd` carry the hidden sidebar's temporary reveal: resting

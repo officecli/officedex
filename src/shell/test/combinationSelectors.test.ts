@@ -172,6 +172,9 @@ const REGISTRY: Record<string, readonly ShellCombination[]> = {
   "#dx-workspace:not(.dx-compact)": ["C1", "C3", "C4", "C5", "C8", "C10"],
   // Shown while the pointer is at the window's edge. A hover, so no shell at rest.
   "#dx-workspace.dx-compact.dx-sidebar-peek": [],
+  // The same reveal as the band of global controls sees it (1.0.12 sidebar
+  // resize); peek implies compact, so this too is a hover, never at rest.
+  "#dx-workspace.dx-sidebar-peek": [],
   "#dx-workspace.dx-compact:not(.dx-with-chat)": ["C2", "C9"],
   "#dx-workspace.dx-compact:not(.dx-chat-right)": ["C2", "C7", "C9"],
   "#dx-workspace.dx-compact:not(.dx-chat-right):not(.dx-chat-floating)": ["C2", "C9"],
@@ -225,6 +228,8 @@ const PHASES = [
   "#shell[data-theme=dark]",
   "#shell.dx-reduced",
   "#shell.dx-resizing",
+  // The sidebar's edge being dragged (1.0.12 UI-03).
+  "#shell.dx-sidebar-resizing",
 ];
 
 describe("workspace state selectors", () => {

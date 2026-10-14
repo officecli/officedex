@@ -6,7 +6,6 @@ import { AccountPage } from "./account/AccountPage";
 import { useAccount } from "./account/useAccount";
 import { AgentProvider, useAgent } from "./agent/AgentContext";
 import { AttentionBorder } from "./agent/AttentionBorder";
-import { mountInputGlow } from "./attention/inputGlow";
 import { useCanvas } from "./canvas/CanvasContext";
 import { useCanvasSelection } from "./canvas/SelectionContext";
 import { useCanvasDirty } from "./canvas/useCanvasDirty";
@@ -17,6 +16,7 @@ import { DocumentTabs } from "./chrome/DocumentTabs";
 import { GlobalControls } from "./chrome/GlobalControls";
 import { NewPopover } from "./chrome/NewPopover";
 import { Sidebar } from "./chrome/Sidebar";
+import { SidebarResizer } from "./chrome/SidebarResizer";
 import { Splitter } from "./chrome/Splitter";
 import { UsageNotice } from "./chrome/UsageNotice";
 import { useReduceMotion } from "./composer/useComposerSettings";
@@ -39,7 +39,7 @@ import { useKeyboardShortcuts } from "./chrome/useKeyboardShortcuts";
 import { SettingsPage } from "./pages/SettingsPage";
 import { workspaceClasses } from "./state/workspaceClasses";
 import { useShell } from "./state/ShellContext";
-import { tabIsChat, workspaceClosed } from "./state/shellReducer";
+import { navMaxWidth, tabIsChat, workspaceClosed } from "./state/shellReducer";
 import { useT } from "../renderer/i18n";
 import "./app.css";
 import "./styles/ua-baseline.css";
@@ -47,6 +47,8 @@ import "./styles/workspace-v11.css";
 import "./styles/workspace-v12.css";
 import "./styles/attention.css";
 import "./styles/workspace-structure.css";
+import "./styles/outer-typography.css";
+import "./styles/sidebar-resize.css";
 import "./styles/product.css";
 import "./styles/typography.css";
 
@@ -63,11 +65,13 @@ import "./styles/typography.css";
  *   │   chats      │  composer         │                              │
  *   │ account   ⚙  │                   │                              │
  *   └──────────────┴───────────────────┴──────────────────────────────┘
- *       244 / 0          320–520                    the rest
+ *    244–480 / 0         320–520                    the rest
  *
- * Each column has its own 40px top row; there is no bar across the window. The
- * top-left band — traffic lights, sidebar switch, Logo Home tab — is 244px and
- * stays put whether or not the sidebar is showing.
+ * Each column has its own 40px top row; there is no bar across the window, but
+ * the rows share one colour (`--dx-titlebar`, 1.0.12 UI-06). The top-left band
+ * — traffic lights, then the sidebar switch and the Logo Home tab as one group
+ * on its right — is as wide as the sidebar (UI-04): the lights stay put and the
+ * group follows the sidebar's edge. With the sidebar hidden the band is 244px.
  *
  * The document host never unmounts. An editor holding unsaved work survives a
  * trip to Home, Assets or Settings: the page is drawn in the same column and
@@ -96,6 +100,8 @@ function Workspace() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [setupVisible, setSetupVisible] = useState(false);
   const [resizing, setResizing] = useState(false);
+  const [sidebarResizing, setSidebarResizing] = useState(false);
+  const viewportWidth = useViewportWidth();
   const [peek, setPeek] = useState(false);
   const [newAnchor, setNewAnchor] = useState<HTMLElement | null>(null);
   const [featureFlyout, setFeatureFlyout] = useState(false);
@@ -162,7 +168,6 @@ function Workspace() {
 
   /* ---- one-time mounts ---------------------------------------------------- */
   useEffect(() => (shell.current ? mountTooltips(shell.current) : undefined), []);
-  useEffect(() => mountInputGlow(() => reduceMotion), [reduceMotion]);
   useEffect(() => dexFaceSettings({ paused: reduceMotion }), [reduceMotion]);
 
   /* ---- a selection made beside a conversation goes to its composer (§19) --- */
@@ -233,13 +238,26 @@ function Workspace() {
     <div
       id="shell"
       ref={shell}
-      className={["shell", reduceMotion ? "dx-reduced" : "", resizing ? "dx-resizing" : ""].filter(Boolean).join(" ")}
+      className={[
+        "shell",
+        reduceMotion ? "dx-reduced" : "",
+        resizing ? "dx-resizing" : "",
+        sidebarResizing ? "dx-sidebar-resizing" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-theme={state.theme}
       data-page={state.page}
       data-loaded={String(loaded)}
       style={{ "--dx-chat": `${state.chatWidth}px` } as React.CSSProperties}
     >
-      <div id="dx-workspace" className={classes} inert={setupVisible}>
+      <div
+        id="dx-workspace"
+        className={classes}
+        inert={setupVisible}
+        // The expanded sidebar's width (UI-03), clamped to what this window can spare.
+        style={{ "--dx-sidebar-width": `${Math.min(state.navWidth, navMaxWidth(viewportWidth))}px` } as React.CSSProperties}
+      >
         <GlobalControls onPeek={startPeek} onPeekEnd={endPeek} />
 
         <Sidebar
@@ -252,6 +270,8 @@ function Workspace() {
           onOpenFeatures={toggleFeatures}
           featuresExpanded={featuresExpanded}
         />
+
+        <SidebarResizer onResizing={setSidebarResizing} />
 
         <ConversationPane />
         <Splitter onResizing={setResizing} />
@@ -363,4 +383,15 @@ function Workspace() {
       ) : null}
     </div>
   );
+}
+
+/** The window's width, for the sidebar's limit; follows a resize. */
+function useViewportWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }

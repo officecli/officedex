@@ -33,6 +33,9 @@ export const shellWorkspaceEn: Record<string, string> = {
   "dx.nav.treeAria": "Projects and conversations",
   "dx.sidebar.show": "Show sidebar",
   "dx.sidebar.hide": "Hide sidebar",
+  "dx.sidebar.resize": "Resize sidebar",
+  "dx.sidebar.hidden": "Hidden",
+  "dx.sidebar.width": "{width} pixels; minimum expanded width 244",
   "dx.home.tab": "Home",
   "dx.home.tabAria": "OfficeDex Home",
   "dx.account.label": "Account",
@@ -296,6 +299,8 @@ export const shellWorkspaceEn: Record<string, string> = {
 
   // composer
   "dx.composer.placeholder": "Describe your task, or use @ to add files…",
+  "dx.composer.placeholderDex": "Work with Dex",
+  "dx.composer.chooseModelNamed": "Choose model: {name}",
   "dx.composer.ariaHome": "Describe your task",
   "dx.composer.ariaChat": "Message OfficeDex",
   "dx.composer.ariaDex": "Message Dex about this document",
@@ -471,6 +476,9 @@ export const shellWorkspaceZh: Record<string, string> = {
   "dx.nav.treeAria": "项目与对话",
   "dx.sidebar.show": "显示侧栏",
   "dx.sidebar.hide": "隐藏侧栏",
+  "dx.sidebar.resize": "调整侧栏宽度",
+  "dx.sidebar.hidden": "已隐藏",
+  "dx.sidebar.width": "{width} 像素；展开时最小 244",
   "dx.home.tab": "首页",
   "dx.home.tabAria": "OfficeDex 首页",
   "dx.account.label": "账户",
@@ -716,6 +724,8 @@ export const shellWorkspaceZh: Record<string, string> = {
   "dx.editor.fullscreen": "全屏",
 
   "dx.composer.placeholder": "描述你的任务，或用 @ 添加文件…",
+  "dx.composer.placeholderDex": "与Dex协作",
+  "dx.composer.chooseModelNamed": "选择模型：{name}",
   "dx.composer.ariaHome": "描述你的任务",
   "dx.composer.ariaChat": "给 OfficeDex 发消息",
   "dx.composer.ariaDex": "就此文档给 Dex 发消息",

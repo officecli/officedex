@@ -15,7 +15,7 @@
 
 #dx-global-controls .dx-window-controls,
 #dx-workspace.dx-compact #dx-global-controls .dx-window-controls {
-  background: var(--dx-chrome);
+  background: var(--dx-titlebar);
   gap: 8px;
   padding: 0 12px;
 }
@@ -39,7 +39,7 @@
   margin-left: -2px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--dx-home-tab);
+  background: transparent;
   color: var(--dx-text);
   font-size: var(--dx-fs-13);
   line-height: 20px;
@@ -55,16 +55,8 @@
   flex: none;
 }
 
-#dx-global-controls .dx-home-tab.dx-selected {
-  background: var(--dx-white);
-}
-
 #dx-global-controls .dx-home-tab:hover {
-  background: var(--dx-home-tab-hover);
-}
-
-#dx-global-controls .dx-home-tab.dx-selected:hover {
-  background: var(--dx-white);
+  background: var(--dx-hover);
 }
 
 #dx-global-controls .dx-home-tab:active {
@@ -481,10 +473,6 @@
   color: var(--dx-surface);
 }
 
-#shell[data-theme=dark] #dx-global-controls .dx-window-controls {
-  background: var(--dx-dark-chrome);
-}
-
 #shell[data-theme=dark] #dx-global-controls .dx-home-tab {
   background: var(--dx-dark-home-tab);
 }
@@ -536,4 +524,34 @@
 
 #dx-workspace.dx-compact.dx-chat-floating #dx-conversation>.dx-pane-top {
   padding-left: 12px;
+}
+
+/* One surface for the existing 40px outer title row; never enters the editor iframe. */
+
+#dx-workspace #dx-global-controls .dx-window-controls,
+#dx-workspace #dx-content>.dx-home-top,
+#dx-workspace.dx-at-settings #dx-content>.dx-home-top,
+#dx-workspace #dx-content>.dx-tabs-strip,
+#dx-workspace #dx-content>.dx-tabs-strip .dx-source-header-actions,
+#dx-workspace #dx-conversation>.dx-pane-top {
+  background: var(--dx-titlebar);
+}
+
+/* Project naming uses a filled field without a border, focus ring, or halo. */
+
+#dx-modal :is([data-form=new-project],[data-form=rename-project]) input[name=name] {
+  border: 0;
+  background: var(--dx-canvas);
+  outline: none;
+  box-shadow: none;
+  transition: none;
+}
+
+#dx-workspace .dx-composer textarea::placeholder {
+  color: var(--dx-placeholder);
+  opacity: 1;
+}
+
+#shell[data-theme=dark] #dx-workspace .dx-composer textarea::placeholder {
+  color: var(--dx-dark-placeholder);
 }

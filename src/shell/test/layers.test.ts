@@ -72,6 +72,7 @@ import { opensStackingContext, parseCss, parseShellCss } from "./cssModel";
 const V11 = "src/shell/styles/workspace-v11.css";
 const V12 = "src/shell/styles/workspace-v12.css";
 const ATTENTION = "src/shell/styles/attention.css";
+const SIDEBAR_RESIZE = "src/shell/styles/sidebar-resize.css";
 
 /**
  * The ladder, copied from `tokens.css` — and asserted equal to it below, so the
@@ -103,7 +104,7 @@ const LADDER: Record<string, string> = {
   "--dx-z-agent-effects": "110",
   "--dx-z-flight": "120",
   "--dx-z-notice": "200",
-  "--dx-z-input-glow": "10000",
+  "--dx-z-sidebar-resizer": "46",
   // The surfaces the design keeps as they were. Root context, above the design's.
   "--shell-z-menu": "300",
   "--shell-z-viewer": "350",
@@ -289,6 +290,15 @@ const STACKING_CONTEXTS: StackingContext[] = [
   { file: V12, selector: "#dx-workspace .dx-file-tab>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
   { file: V12, selector: ".dx-asset-line>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
   { file: V12, selector: "#dx-conversation .dx-asset-line>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V12, selector: "#dx-sidebar .dx-project-row-actions", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  {
+    file: V12,
+    selector: ".dx-new-popover .dx-new-type-grid button:disabled, #dx-workspace .dx-quick-new .dx-ib:disabled",
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — More Documents' types, shown and unavailable",
+  },
   {
     file: V11,
     selector: ".dx-swap",
@@ -305,17 +315,7 @@ const STACKING_CONTEXTS: StackingContext[] = [
     localRungs: [],
     why: LEAF + " — a tab's favourite mark",
   },
-  {
-    file: V12,
-    selector: "#dx-workspace .dx-file-tab .dx-tab-dex-watermark",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why:
-      "The Dex watermark behind a conversation tab's title, at 5.5%. It holds one " +
-      "image; the title and the close button beside it carry `--dx-z-raised` " +
-      "precisely so they paint over it, and they are its siblings, not inside it.",
-  },
+
   {
     file: V12,
     selector: ".dx-agent-process[open]>summary>.dx-icon, .dx-agent-tool[open]>summary>.dx-icon",
@@ -407,7 +407,8 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     rung: "--dx-z-raised",
     context: "root",
     note:
-      "A tab's title and close button, lifted over the watermark behind them. " +
+      "A tab's title and close button, lifted one rung (the watermark they once " +
+      "cleared is gone in 1.0.12, the prototype keeps the lift). " +
       "Measured at the root: nothing between a tab and `#shell` opens a context, " +
       "so this 1 does compare against the sidebar's 15 — and loses, which is " +
       "right, since the hover-shown sidebar is drawn over the tab strip.",
@@ -462,7 +463,24 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     context: "root",
     note: "\"Drop to open\", drawn over whichever region a file is being dragged across.",
   },
+  {
+    file: V12,
+    selector: "#dx-content .dx-home-context-bar+.dx-composer",
+    rung: "--dx-z-raised",
+    context: "root",
+    note: "Home's composer, one rung over the project rail it overlaps by 12px (1.0.12 UI-07).",
+  },
   { file: V12, selector: "#dx-global-controls", rung: "--dx-z-global-controls", context: "root" },
+  {
+    file: SIDEBAR_RESIZE,
+    selector: "#dx-sidebar-resizer",
+    rung: "--dx-z-sidebar-resizer",
+    context: "root",
+    note:
+      "The sidebar's 8px drag edge (1.0.12 UI-03). One above the global controls, " +
+      "whose band it never overlaps (it starts 40px down), so the hidden sidebar's " +
+      "6px reveal edge stays reachable over the conversation and the content.",
+  },
   {
     file: V12,
     selector: "#dx-feature-flyout",
@@ -493,18 +511,7 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     note: "The features panel folding into its gift button: a copy that exists for the length of the flight.",
   },
   { file: V11, selector: "#dx-notice", rung: "--dx-z-notice", context: "root" },
-  {
-    file: ATTENTION,
-    selector: ".dx-od-input-glow",
-    rung: "--dx-z-input-glow",
-    context: "root",
-    note:
-      "The colour glow around the text field that has focus. 10000 because it has " +
-      "to show over a field inside the component library's dialogs (1000+) as " +
-      "well; harmless there because it is view-only and takes no pointer event. " +
-      "It cannot show over a field inside `#dx-modal` — nothing in the page can — " +
-      "which is why the glow for those is mounted inside the dialog.",
-  },
+
 
   // ---- inside a context ---------------------------------------------------
   { file: V11, selector: ".dx-window-controls", rung: "--dx-z-window-controls", context: "#dx-global-controls" },

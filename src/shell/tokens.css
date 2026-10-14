@@ -62,6 +62,10 @@
   /* surfaces with one owner */
   --dx-sidebar: #f7f7f6;
   --dx-chrome: #eef0f3; /* the 244px window-control band */
+  /* 1.0.12: the one 40px title row — window controls, Home's empty top, the
+     chat title, the tab strip and its file actions. Follows --dx-chrome. */
+  --dx-titlebar: var(--dx-chrome);
+  --dx-placeholder: #929ba4; /* placeholder ink; the field itself never fades */
   --dx-home-tab: #e3e6eb; /* Logo tab, not on Home */
   --dx-home-tab-hover: #edf0f3;
   --dx-card-preview: #f5f5f5;
@@ -101,6 +105,7 @@
      `[data-theme="dark"]` selectors. */
   --dx-dark-on-primary: #20252a;
   --dx-dark-chrome: #24272c;
+  --dx-dark-placeholder: #84909b;
   --dx-dark-home-tab: #343840;
   --dx-dark-home-tab-selected: #4b515a;
   --dx-dark-primary-hover: #d1d8de;
@@ -160,6 +165,7 @@
   --dx-z-sidebar-peek: 40; /* the hidden sidebar, shown on hover */
   --dx-z-drop: 40;
   --dx-z-global-controls: 45;
+  --dx-z-sidebar-resizer: 46; /* the sidebar's drag edge, over the top-left band */
   --dx-z-flyout: 45; /* Hot and fresh features, away from Home */
   --dx-z-menu: 60;
   --dx-z-popover: 70; /* New */
@@ -167,7 +173,6 @@
   --dx-z-agent-effects: 110;
   --dx-z-flight: 120; /* the features panel folding into its gift button */
   --dx-z-notice: 200;
-  --dx-z-input-glow: 10000; /* view-only, never takes a pointer event */
 
   /* ==== Names the pre-r10 surfaces still read ============================ */
   /*
@@ -589,15 +594,16 @@
   --od-toast-inset-top: calc(var(--shell-windowbar-h) + 8px);
 }
 
-/* October typography handoff. Role values do not redefine the numeric scale. */
+/* Type roles, 1.0.12 handoff §三. Role values do not redefine the numeric scale. */
 #shell {
-  --dx-type-ui: 400 14px/20px var(--dx-font);
+  --dx-type-ui: 400 13px/20px var(--dx-font); /* nav, menus, buttons, tabs */
+  --dx-type-body: 400 14px/22px var(--dx-font); /* form inputs, settings body */
   --dx-type-chat: 400 14px/22px var(--dx-font);
   --dx-type-code: 400 13px/20px var(--dx-font-mono);
   --dx-type-hero: 500 24px/32px var(--dx-font);
   --dx-type-title: 500 20px/28px var(--dx-font);
   --dx-type-section: 500 16px/24px var(--dx-font);
-  --dx-type-label: 500 14px/20px var(--dx-font);
+  --dx-type-label: 500 14px/22px var(--dx-font);
   --dx-type-author: 500 14px/22px var(--dx-font);
   --dx-type-meta: 400 12px/18px var(--dx-font);
   --dx-primary: #000000;

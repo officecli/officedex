@@ -1486,35 +1486,10 @@
   margin-bottom: 16px;
 }
 
-#dx-workspace .dx-file-tab .dx-tab-dex-watermark {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: .055;
-}
-
-#dx-workspace .dx-file-tab .dx-tab-dex-watermark img {
-  position: absolute;
-  width: 76px;
-  height: 76px;
-  max-width: none;
-  right: 4px;
-  top: -12px;
-  object-fit: contain;
-}
-
 #dx-workspace .dx-file-tab .dx-tab-title,
 #dx-workspace .dx-file-tab>.dx-ib {
   position: relative;
   z-index: var(--dx-z-raised);
-}
-
-@media (forced-colors: active) {
-  #dx-workspace .dx-file-tab .dx-tab-dex-watermark {
-    display: none;
-  }
 }
 
 /* 1.0 eye/state motion and edge-rest pose, at the approved 42px bubble size. */
@@ -2223,4 +2198,247 @@
 
 .dx-message.dx-user>blockquote {
   margin: 0 0 6px;
+}
+
+/* More Documents stays visible while unavailable. Reuse approved mono icons and native disabled semantics. */
+
+.dx-new-popover .dx-new-type-grid button:disabled,
+#dx-workspace .dx-quick-new .dx-ib:disabled {
+  opacity: .45;
+  color: var(--dx-muted);
+  background: transparent;
+  cursor: default;
+  pointer-events: auto;
+}
+
+.dx-new-popover .dx-new-type-grid button:disabled:hover,
+.dx-new-popover .dx-new-type-grid button:disabled:active,
+#dx-workspace .dx-quick-new .dx-ib:disabled:hover,
+#dx-workspace .dx-quick-new .dx-ib:disabled:active {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Project lifecycle: contextual entry, native controls, unchanged pane geometry. */
+
+#dx-sidebar .dx-project-row>button {
+  min-width: 0;
+  flex: 1;
+}
+
+#dx-sidebar .dx-project-row-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  opacity: 0;
+}
+
+#dx-sidebar .dx-project-row-actions>.dx-ib {
+  width: 24px;
+  height: 28px;
+  padding: 4px;
+  flex: none;
+}
+
+#dx-sidebar .dx-project-row:hover .dx-project-row-actions,
+#dx-sidebar .dx-project-row:focus-within .dx-project-row-actions {
+  opacity: 1;
+}
+
+#dx-sidebar .dx-project-row-actions .dx-more {
+  opacity: 1;
+}
+
+#dx-conversation .dx-chat-start {
+  padding: 24px 0;
+  color: var(--dx-muted);
+}
+
+#dx-conversation .dx-chat-start h3 {
+  font-size: var(--dx-fs-16);
+  line-height: 24px;
+  color: var(--dx-text);
+  margin: 0 0 4px;
+}
+
+#dx-conversation .dx-chat-start p {
+  margin: 0;
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+}
+
+#dx-conversation .dx-chat-project-context {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--dx-fs-12);
+  line-height: 18px;
+  color: var(--dx-muted);
+  padding: 0 8px 8px;
+  min-width: 0;
+}
+
+#dx-workspace .dx-project-library-group {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--dx-line);
+}
+
+#dx-workspace .dx-project-library-group h2 {
+  font-size: var(--dx-fs-16);
+  line-height: 24px;
+  margin: 0;
+}
+
+#dx-workspace .dx-project-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding-left: 26px;
+}
+
+#dx-workspace .dx-project-chat-row>.dx-grow {
+  text-align: left;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+#dx-workspace .dx-project-chat-row>button.dx-grow {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+#dx-workspace .dx-project-chat-row>button.dx-grow:hover {
+  background: var(--dx-hover);
+}
+
+#dx-notice .dx-notice-undo {
+  margin-left: 12px;
+  padding: 2px 6px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#dx-notice.dx-visible .dx-notice-undo {
+  pointer-events: auto;
+}
+
+#dx-notice:not(.dx-visible) .dx-notice-undo {
+  display: none;
+}
+
+/* Home context rail follows the approved Codex screenshot; composer controls stay shared. */
+
+#dx-content .dx-home-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  margin: 0 14px;
+  padding: 6px 10px 18px;
+  border-radius: 18px 18px 0 0;
+  background: var(--dx-canvas);
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+  color: var(--dx-text);
+}
+
+#dx-content .dx-home-context-bar .dx-home-project-picker {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 6px;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+#dx-content .dx-home-context-bar .dx-home-project-picker>.dx-icon {
+  flex: none;
+}
+
+#dx-content .dx-home-context-bar .dx-home-project-picker>.dx-icon:first-child,
+#dx-content .dx-home-context-bar .dx-home-environment>.dx-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#dx-content .dx-home-context-bar .dx-home-project-picker>.dx-icon:last-child {
+  width: 12px;
+  height: 12px;
+  color: var(--dx-muted);
+}
+
+#dx-content .dx-home-context-bar .dx-home-environment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  white-space: nowrap;
+}
+
+#dx-content .dx-home-context-bar>.dx-ib {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  color: var(--dx-muted);
+  flex: none;
+}
+
+#dx-content .dx-home-context-bar>.dx-ib>.dx-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#dx-content .dx-home-context-bar+.dx-composer {
+  position: relative;
+  z-index: var(--dx-z-raised);
+  margin-top: -12px;
+  background: var(--dx-surface);
+}
+
+#dx-content .dx-home-context-bar button[aria-expanded=true] {
+  background: var(--dx-hover);
+}
+
+#dx-layers .dx-home-context-menu {
+  min-width: 224px;
+  max-width: min(320px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 32px));
+  overflow-y: auto;
+}
+
+#dx-layers .dx-home-context-menu button {
+  min-width: 0;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+#dx-layers .dx-home-context-menu .dx-context-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
+  flex: none;
+}
+
+#dx-layers .dx-home-context-menu [aria-checked=true] {
+  background: var(--dx-selected);
+}
+
+@media (max-width: 900px) {
+  #dx-content .dx-home-context-bar {
+    margin-inline: 10px;
+    gap: 8px;
+    padding-inline: 6px;
+  }
+  #dx-content .dx-home-context-bar .dx-home-project-picker {
+    max-width: 100%;
+  }
 }

@@ -22,7 +22,7 @@
   margin: 0 0 6px;
   color: var(--shell-ink-title);
   font-size: var(--shell-text-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .shell-usage-notice p {

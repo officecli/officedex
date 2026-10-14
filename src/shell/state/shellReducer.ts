@@ -29,7 +29,23 @@ export type Page = "home" | "local" | "projects" | "assets" | "editor" | "settin
 export type ChatPanel = "chat" | "assets";
 export type ChatPosition = "left" | "right";
 
+/** The sidebar's default and minimum expanded width (1.0.12 UI-03). */
 export const NAV_WIDTH = 244;
+export const NAV_MAX_WIDTH = 480;
+/** A drag that asks for less than this hides the sidebar instead of narrowing it. */
+export const NAV_COLLAPSE_BELOW = 180;
+/** What a wide sidebar must leave the rest of the window. */
+export const NAV_CONTENT_RESERVE = 520;
+/** Arrow-key step on the sidebar's edge; Shift doubles it. */
+export const NAV_KEYBOARD_STEP = 16;
+
+/**
+ * The widest the sidebar may be in a window this wide: 480px, but never so
+ * wide that less than 520px is left beside it — and never below 244px, so a
+ * narrow window keeps its existing breakpoints rather than a squeezed sidebar.
+ */
+export const navMaxWidth = (viewportWidth: number): number =>
+  Math.max(NAV_WIDTH, Math.min(NAV_MAX_WIDTH, viewportWidth - NAV_CONTENT_RESERVE));
 export const CHAT_DEFAULT_WIDTH = 360;
 export const CHAT_MIN_WIDTH = 320;
 export const CHAT_MAX_WIDTH = 520;
@@ -98,6 +114,11 @@ export interface ShellState {
   chatWidth: number;
   /** The sidebar is fully hidden (0px). Hover shows it temporarily; that is not state. */
   navCollapsed: boolean;
+  /**
+   * The expanded sidebar's width, 244–480 (1.0.12 UI-03). Kept while hidden,
+   * so showing it again brings back the width it had.
+   */
+  navWidth: number;
   /** Projects open in the sidebar tree. */
   expandedFolderIds: string[];
   openFileIds: string[];
@@ -144,6 +165,19 @@ export type ShellAction =
   | { type: "swap-chat" }
   | { type: "set-chat-width"; width: number }
   | { type: "toggle-nav" }
+  /**
+   * The sidebar's edge, dragged or stepped to `width`. Less than 180 hides the
+   * sidebar and keeps the width it had; 180–244 is 244; `max` is the window's
+   * own limit (`navMaxWidth`).
+   */
+  | { type: "resize-nav"; width: number; max?: number }
+  /** A drag on the edge cancelled: put back what it started from. */
+  | { type: "restore-nav"; width: number; collapsed: boolean }
+  /**
+   * A drag on the edge let go. If it ended hidden, the width to come back to is
+   * the one the drag started from, not whatever it passed through on the way.
+   */
+  | { type: "finish-nav-drag"; startWidth: number }
   | { type: "toggle-folder"; folderId: string }
   | { type: "reveal-folder"; folderId: string }
   /** Opens a file in the context on screen: the open conversation, or Local. */
@@ -189,6 +223,7 @@ export const initialShellState: ShellState = {
   chatPosition: "left",
   chatWidth: CHAT_DEFAULT_WIDTH,
   navCollapsed: false,
+  navWidth: NAV_WIDTH,
   expandedFolderIds: [],
   openFileIds: [],
   activeFileId: null,
@@ -232,7 +267,7 @@ export const showsEditor = (state: ShellState): boolean =>
 /** The conversation fills the window because the content region is closed. */
 export const workspaceClosed = (state: ShellState): boolean => state.chat !== null && !state.workspaceOpen;
 
-/** Whether an open file's tab belongs to a conversation (draws the Dex watermark). */
+/** Whether an open file's tab belongs to a conversation (compact toolbar, chat context). */
 export const tabIsChat = (state: ShellState, fileId: string): boolean =>
   Boolean(state.tabContexts[fileId]);
 
@@ -347,6 +382,26 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
 
     case "toggle-nav":
       return { ...state, navCollapsed: !state.navCollapsed };
+
+    case "resize-nav": {
+      if (!Number.isFinite(action.width)) return state;
+      if (action.width < NAV_COLLAPSE_BELOW) return state.navCollapsed ? state : { ...state, navCollapsed: true };
+      const max = clamp(finite(action.max, NAV_MAX_WIDTH), NAV_WIDTH, NAV_MAX_WIDTH);
+      const navWidth = clamp(Math.round(action.width), NAV_WIDTH, max);
+      return !state.navCollapsed && state.navWidth === navWidth ? state : { ...state, navCollapsed: false, navWidth };
+    }
+
+    case "finish-nav-drag":
+      return state.navCollapsed && state.navWidth !== action.startWidth
+        ? { ...state, navWidth: clamp(finite(action.startWidth, NAV_WIDTH), NAV_WIDTH, NAV_MAX_WIDTH) }
+        : state;
+
+    case "restore-nav":
+      return {
+        ...state,
+        navCollapsed: action.collapsed,
+        navWidth: clamp(finite(action.width, NAV_WIDTH), NAV_WIDTH, NAV_MAX_WIDTH),
+      };
 
     case "toggle-folder":
       return { ...state, expandedFolderIds: toggleIn(state.expandedFolderIds, action.folderId) };
@@ -472,6 +527,7 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
         theme: initialShellState.theme,
         avatar: initialShellState.avatar,
         navCollapsed: initialShellState.navCollapsed,
+        navWidth: initialShellState.navWidth,
         chatWidth: initialShellState.chatWidth,
         chatPosition: initialShellState.chatPosition,
         chatFloating: initialShellState.chatFloating,
@@ -574,6 +630,7 @@ export function hydrateShellState(persisted: Partial<PersistedShellState>): Shel
     chatPosition: persisted.chatPosition === "right" ? "right" : "left",
     chatWidth: clamp(finite(persisted.chatWidth, CHAT_DEFAULT_WIDTH), CHAT_MIN_WIDTH, CHAT_MAX_WIDTH),
     navCollapsed: persisted.navCollapsed === true,
+    navWidth: clamp(finite(persisted.navWidth, NAV_WIDTH), NAV_WIDTH, NAV_MAX_WIDTH),
     expandedFolderIds: Array.isArray(persisted.expandedFolderIds) ? persisted.expandedFolderIds : [],
     openFileIds,
     activeFileId,
@@ -601,6 +658,7 @@ export function toPersisted(state: ShellState): PersistedShellState {
     chatPosition: state.chatPosition,
     chatWidth: state.chatWidth,
     navCollapsed: state.navCollapsed,
+    navWidth: state.navWidth,
     expandedFolderIds: state.expandedFolderIds,
     openFileIds: state.openFileIds,
     activeFileId: state.activeFileId,

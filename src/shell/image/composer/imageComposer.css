@@ -815,7 +815,7 @@
   box-sizing: border-box;
   border-radius: 8px;
   font-size: var(--shell-text-xs);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .shell-ig-mark {

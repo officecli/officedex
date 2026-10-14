@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, type DragEvent, type KeyboardEvent } from "react";
 
 import { useT } from "../../renderer/i18n";
-import dexFlatInk from "../assets/dex/officedex-agent-flat-ink.svg";
 import followIcon from "../assets/titlebar/follow.svg";
 import moreIcon from "../assets/titlebar/more.svg";
 import presentIcon from "../assets/titlebar/present.svg";
@@ -35,9 +34,9 @@ const NO_REVIEW: ReadonlySet<string> = new Set();
  * it), and the save / share / editor actions at the right end when a document
  * is on screen.
  *
- * A tab that was opened from a conversation carries the faint Dex watermark; a
- * Local tab does not. That is the tab's own context, remembered per file, and
- * activating a tab restores it (§18).
+ * A tab remembers whether it was opened from a conversation or from Local
+ * (`data-context`), per file, and activating it restores that context (§18).
+ * Neither kind draws a Dex watermark any more (1.0.12 UI-13).
  *
  * `workingFileIds` are files an agent run is writing to right now: their icon
  * slot shows Dex instead of the file type, without the name or the width
@@ -168,11 +167,6 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
               }}
               onDrop={(event) => onDrop(event, file)}
             >
-              {chatTab ? (
-                <span className="dx-tab-dex-watermark" aria-hidden="true">
-                  <img src={dexFlatInk} alt="" />
-                </span>
-              ) : null}
               <button
                 type="button"
                 className="dx-tab-title"

@@ -7,8 +7,10 @@
  * be free to redraw them. Stroke, width and cap come from `.dx-icon` in
  * `kit/base.css`.
  *
- * Two entries are not in the sprite and are drawn inline by the prototype
- * (`A.icon` in v11/data.js): `Bookmark` and `ArrowLeftRight`.
+ * Some entries are not in the sprite and are drawn inline by the prototype
+ * (`A.icon` in v11/data.js): `Bookmark` and `ArrowLeftRight`; and, from the
+ * 1.0.12 prototype, `WindowMaximize` / `WindowRestore` (the conversation's
+ * float and dock, UI-12) and `Puzzle` (Skills).
  */
 export const ICON_BODIES = {
   Plus: "<path d=\"M5 12h14\"></path><path d=\"M12 5v14\"></path>",
@@ -61,6 +63,9 @@ export const ICON_BODIES = {
   HardDrive: "<path d=\"M10 16h.01\"></path><path d=\"M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path><path d=\"M21.946 12.013H2.054\"></path><path d=\"M6 16h.01\"></path>",
   CircleHelp: "<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"></path><path d=\"M12 17h.01\"></path>",
   ArrowRight: "<path d=\"M5 12h14\"></path><path d=\"m12 5 7 7-7 7\"></path>",
+  WindowMaximize: "<path d=\"M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3\"></path>",
+  WindowRestore: "<rect x=\"3\" y=\"7\" width=\"14\" height=\"14\" rx=\"2\"></rect><path d=\"M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2\"></path>",
+  Puzzle: "<path d=\"M8 4h2a2.5 2.5 0 1 1 5 0h3a2 2 0 0 1 2 2v3a2.5 2.5 0 1 1 0 5v4a2 2 0 0 1-2 2h-4a2.5 2.5 0 1 0-5 0H6a2 2 0 0 1-2-2v-4a2.5 2.5 0 1 0 0-5V6a2 2 0 0 1 2-2h2Z\"></path>",
   Maximize2: "<path d=\"M15 3h6v6\"></path><path d=\"m21 3-7 7\"></path><path d=\"m3 21 7-7\"></path><path d=\"M9 21H3v-6\"></path>",
   Scissors: "<circle cx=\"6\" cy=\"6\" r=\"3\"></circle><path d=\"M8.12 8.12 12 12\"></path><path d=\"M20 4 8.12 15.88\"></path><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><path d=\"M14.8 14.8 20 20\"></path>",
   Copy: "<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"></rect><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"></path>",

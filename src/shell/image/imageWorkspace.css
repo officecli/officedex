@@ -46,7 +46,7 @@
 
 .shell-image-titles strong {
   font-size: var(--shell-text-lg);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--shell-ink-title);
   overflow: hidden;
   white-space: nowrap;
@@ -296,7 +296,7 @@
 
 .shell-image-versions-head strong {
   font-size: var(--shell-text-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--shell-ink-title);
 }
 

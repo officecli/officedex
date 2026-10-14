@@ -53,7 +53,7 @@
 .shell-account-title {
   margin: 4px 0 0;
   font-size: var(--shell-text-2xl);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--shell-ink-title);
 }
 

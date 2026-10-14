@@ -133,7 +133,7 @@
 
 .shell-image-viewer-titles strong {
   font-size: var(--shell-text-lg);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .shell-image-viewer-titles span {
@@ -247,7 +247,7 @@
   padding: 0 8px;
   border-radius: var(--shell-radius-item);
   font-size: var(--shell-text);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .shell-image-viewer-text[aria-pressed="true"] {
