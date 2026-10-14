@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"officedex/internal/applog"
+	"officedex/internal/editmenu"
 	"officedex/internal/windowchrome"
 	"officedex/internal/word2mowhttp"
 	"officedex/internal/writerfonts"
@@ -104,8 +105,11 @@ func newWailsAppOptions(app *App) *options.App {
 		Windows: &windows.Options{
 			Theme: windows.SystemDefault,
 		},
-		OnStartup:  app.startup,
-		OnDomReady: func(context.Context) { windowchrome.Install() },
+		OnStartup: app.startup,
+		OnDomReady: func(context.Context) {
+			windowchrome.Install()
+			editmenu.ReleaseDeleteKey()
+		},
 		OnShutdown: app.shutdown,
 		Bind:       []any{app},
 	}
