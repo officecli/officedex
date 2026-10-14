@@ -54,7 +54,12 @@ for (const ext of ['docx','pptx','xlsx'] as const) test(`N26-01 ${ext}: rename p
       await expect(grid.locator('canvas')).toBeVisible();
       await expect(page.locator('.spreadsheet-canvas__loading')).toHaveCount(0);
       const address=grid.getByRole('textbox').first();
-      await grid.locator('canvas').click({position:{x:140,y:55}});
+      // Go to B2 by name, not by pixel: a workbook opens at the shell's
+      // default zoom (80%, UI-14), and the cell under a fixed point moves
+      // with it.
+      await address.click();
+      await address.fill('B2');
+      await address.press('Enter');
       await expect(address).toHaveValue('B2');
       await page.keyboard.type(marker.endsWith('RETRY')?'19':'17');
       await page.keyboard.press('Enter');
