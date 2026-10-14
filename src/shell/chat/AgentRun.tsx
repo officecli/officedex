@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useT } from "../../renderer/i18n";
 import type { Agent } from "../agent/AgentContext";
+import { wasConfirmedByUser } from "../agent/confirmedSuggestions";
 import { DexFace } from "../dex/DexFace";
 import { formatDateTime, formatElapsed } from "../kit/format";
 import { FileIcon, Icon, extensionOf, type IconName } from "../kit/Icon";
@@ -52,7 +53,10 @@ function summaryOf(state: RunState, task: AgentTask, artifact: FileMeta | null, 
     case "review":
       return t("dx.run.summary.review");
     case "complete":
-      if (task.suggestion?.applied) return t("dx.run.summary.applied");
+      if (task.suggestion?.applied) {
+        const approved = task.suggestion.confirmed === true || wasConfirmedByUser(task.suggestion.id);
+        return t(approved ? "dx.run.summary.applied" : "dx.run.summary.appliedDirect");
+      }
       if (artifact || task.artifact) return t("dx.run.summary.fileReady");
       return t("dx.run.summary.finished");
     case "rejected":

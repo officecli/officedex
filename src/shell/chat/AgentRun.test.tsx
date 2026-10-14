@@ -229,6 +229,25 @@ describe("Undo", () => {
   });
 });
 
+// 1.0.34 N34-05: "the changes you approved" only when the user approved them.
+describe("the applied summary", () => {
+  const applied = (confirmed?: boolean) => (task: AgentTask): AgentTask => ({
+    ...task,
+    suggestion: { id: "s", targetFileId: "readme", summary: "Clarify.", applied: true, undoable: true, ...(confirmed === undefined ? {} : { confirmed }) },
+  });
+
+  it("does not credit the user with a change applied without asking", async () => {
+    const run = await stage("complete", applied());
+    expect(run.card().textContent).toContain("Changes applied.");
+    expect(run.card().textContent).not.toContain("Your approved changes");
+  });
+
+  it("says so when the user approved it", async () => {
+    const run = await stage("complete", applied(true));
+    expect(run.card().textContent).toContain("Your approved changes have been applied.");
+  });
+});
+
 describe("Models", () => {
   // Only a failure Settings → Models can actually fix offers the trip there.
   it("is offered for a model failure", async () => {

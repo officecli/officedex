@@ -206,6 +206,13 @@ export interface AgentSuggestion {
   targetFileId: string;
   summary: string;
   applied: boolean;
+  /**
+   * The user approved this change — with Review's Apply, or the editor's own
+   * review before an in-place edit. Absent or false, it may have been applied
+   * without asking (Full access), and nothing may say "the changes you
+   * approved" (1.0.34 N34-05).
+   */
+  confirmed?: boolean;
   /** False once the target file changed after Apply — Undo is then refused. */
   undoable: boolean;
 }

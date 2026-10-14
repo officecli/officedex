@@ -355,6 +355,8 @@ export function startDocumentEditRun(
           ? translate("shell.edit.notSaved", { applied: appliedLine(result.applied, result.scope, input.documentType), error: agentErrorSummary(result.saveError) })
           : appliedLine(result.applied, result.scope, input.documentType),
         applied: true,
+        // Only a run that stopped for the editor's review was approved.
+        confirmed: Boolean(input.requireReview),
         // The card's Undo is disabled rather than hidden when a change cannot
         // be taken back, and says why on hover — see `TaskPanel`.
         undoable: result.undo !== null,

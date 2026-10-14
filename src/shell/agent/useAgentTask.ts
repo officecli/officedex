@@ -7,6 +7,7 @@ import { translate } from "../../renderer/i18n";
 import type { AgentMessage, AgentOutlinePage, AgentTask, InputFileReplacement } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { newConversationId } from "../state/libraryMeta";
+import { rememberConfirmedSuggestion } from "./confirmedSuggestions";
 import { useCanvas } from "../canvas/CanvasContext";
 import type { ComposerSubmission } from "../composer/Composer";
 import type { CanvasAdapter } from "../editor/canvasContract";
@@ -436,7 +437,10 @@ export function useAgentTask() {
       // Applying marks the target file dirty, so the tab dot and status bar
       // have to be re-read from the port rather than guessed at. Only worth
       // doing if the call actually went through.
-      if (await attempt(() => port.agent.applySuggestion(id))) await reload();
+      if (await attempt(() => port.agent.applySuggestion(id))) {
+        rememberConfirmedSuggestion(id);
+        await reload();
+      }
     },
     [port, reload],
   );
