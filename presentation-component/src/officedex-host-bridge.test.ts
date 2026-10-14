@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   createEditorSaveBridge,
+  createEditorZoomBridge,
   editorHoldsEdits,
   INLINE_ASSET_BYTE_LIMIT,
   inlineAssetUris,
@@ -317,6 +318,79 @@ describe("editor save bridge", () => {
     // The first editor's state no longer reaches the host.
     first.report({ ...typing, pendingChangeCount: 9 });
     expect(dirtyPosts(post)).toEqual([true, false]);
+    bridge.dispose();
+  });
+});
+
+describe("editor zoom bridge", () => {
+  function workbench(initialScale = 0.6) {
+    let scale = initialScale;
+    const mainArea = { zoomMode: "fit" as "fit" | "custom" };
+    const listeners = new Set<() => void>();
+    const emit = (next: number) => {
+      if (next === scale) return;
+      scale = next;
+      for (const listener of [...listeners]) listener();
+    };
+    const views = {
+      getScale: () => scale,
+      setScale: vi.fn((next: number) => {
+        mainArea.zoomMode = "custom";
+        emit(next);
+      }),
+      zoomToFit: vi.fn(() => {
+        mainArea.zoomMode = "fit";
+        emit(0.6);
+      }),
+      on: (_event: "zoomScaleDidChange", listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+    // A fitted slide following the window: the scale moves, the mode does not.
+    const resize = (next: number) => emit(next);
+    return { handle: { editorFacade: { views }, core: { view: { mainArea } } }, views, resize, listeners };
+  }
+
+  function mount(target: EventTarget, handle: object) {
+    target.dispatchEvent(new CustomEvent("officedex:pptx-workbench-ready", { detail: { workbench: handle } }));
+  }
+
+  it("opens a workbench at the host zoom and reports only the user's changes", () => {
+    const target = new EventTarget() as unknown as Window;
+    const post = vi.fn();
+    const bridge = createEditorZoomBridge(target, post);
+    bridge.set(80);
+    const deck = workbench();
+    mount(target, deck.handle);
+    expect(deck.views.setScale).toHaveBeenCalledWith(0.8);
+    expect(post).not.toHaveBeenCalled();
+
+    deck.views.setScale(1.1);
+    expect(post.mock.calls).toEqual([[{ type: "presentation:zoom-changed", zoom: 110 }]]);
+    deck.views.zoomToFit();
+    deck.resize(0.7);
+    deck.resize(0.9);
+    expect(post.mock.calls.slice(1)).toEqual([[{ type: "presentation:zoom-changed", zoom: "fit" }]]);
+    bridge.dispose();
+    expect(deck.listeners.size).toBe(0);
+  });
+
+  it("a fitted opening stays quiet through resizes, and a remount opens where the user left off", () => {
+    const target = new EventTarget() as unknown as Window;
+    const post = vi.fn();
+    const bridge = createEditorZoomBridge(target, post);
+    bridge.set("fit");
+    const first = workbench();
+    mount(target, first.handle);
+    first.resize(0.75);
+    expect(post).not.toHaveBeenCalled();
+    first.views.setScale(1.5);
+    target.dispatchEvent(new CustomEvent("officedex:pptx-workbench-detached", { detail: { workbench: first.handle } }));
+    const second = workbench();
+    mount(target, second.handle);
+    expect(second.views.setScale).toHaveBeenCalledWith(1.5);
+    expect(post.mock.calls).toEqual([[{ type: "presentation:zoom-changed", zoom: 150 }]]);
     bridge.dispose();
   });
 });

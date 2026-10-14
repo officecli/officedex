@@ -8,6 +8,7 @@ import {
   type WriterSelectionContent,
   type WriterSelectionSummary,
   type WriterToolbarProfile,
+  type WriterZoom,
 } from "../../shared/writerProtocol";
 import { getCurrentLocale } from "../i18n";
 import { useCanvasLocale, withEmbedLocaleQuery } from "../../shell/editor/canvasLocale";
@@ -53,6 +54,14 @@ export interface WriterEditorFrameProps {
   toolbarProfile?: WriterToolbarProfile;
   /** Opens the document without a save path; Writer hides its save action. */
   readOnly?: boolean;
+  /**
+   * The zoom the document opens at. Read when the embed says hello, so a
+   * change afterwards does not move a page the user may have zoomed since.
+   * Absent keeps Writer's own opening: fitted to the page width.
+   */
+  zoom?: WriterZoom;
+  /** The user changed the zoom inside Writer. */
+  onZoomChange?: (zoom: WriterZoom) => void;
   onDirtyChange?: (dirty: boolean) => void;
   /** Where the caret is, so the host can scope an instruction to it. */
   onSelectionChange?: (selection: WriterSelectionSummary) => void;
@@ -140,6 +149,8 @@ export function WriterEditorFrame({
   fileName,
   toolbarProfile = "full",
   readOnly = false,
+  zoom,
+  onZoomChange,
   onDirtyChange,
   onSelectionChange,
   onUnavailable,
@@ -160,7 +171,9 @@ export function WriterEditorFrame({
   /** The embed completed its handshake, so the boot deadline no longer applies. */
   const readyRef = useRef(false);
   const unavailableRef = useRef(false);
-  const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onSaveFailed, onAgentReady });
+  const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onZoomChange, onUnavailable, onReady, onSaved, onSaveFailed, onAgentReady });
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   const onFlushReadyRef = useRef(onFlushReady);
   const dirtyRef = useRef(false);
   const loadedRef = useRef(false);
@@ -177,7 +190,7 @@ export function WriterEditorFrame({
   const saveModesRef = useRef(new Map<string, boolean>());
   const [componentURL, setComponentURL] = useState<string>();
 
-  callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onSaveFailed, onAgentReady };
+  callbacksRef.current = { onDirtyChange, onSelectionChange, onZoomChange, onUnavailable, onReady, onSaved, onSaveFailed, onAgentReady };
   onFlushReadyRef.current = onFlushReady;
 
   useEffect(() => {
@@ -354,6 +367,9 @@ export function WriterEditorFrame({
                 return { replaced: result.replaced, scope };
               },
             });
+            // Ahead of the bytes, so the first page Writer draws is already at
+            // this zoom rather than fitted and then resized.
+            if (zoomRef.current) post({ type: "writer:set-zoom", zoom: zoomRef.current });
             const content = toTransferableBuffer(pending?.data ?? artifact.data);
             post(
               {
@@ -419,6 +435,9 @@ export function WriterEditorFrame({
         case "writer:selection-changed":
           selectionRef.current = event.selection;
           callbacksRef.current.onSelectionChange?.(event.selection);
+          return;
+        case "writer:zoom-changed":
+          callbacksRef.current.onZoomChange?.(event.zoom);
           return;
         case "writer:save": {
           const saveAsCopy = saveModesRef.current.get(event.requestId) ?? event.saveAsCopy === true;

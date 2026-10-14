@@ -7,6 +7,7 @@ import type {
   CanvasAdapter,
   CanvasDraft,
   CanvasSelection,
+  CanvasZoom,
   DocumentEditRequest,
   DocumentEditResult,
 } from "./canvasContract";
@@ -43,6 +44,8 @@ export interface TestCanvasAdapter {
   applyFromDocument: () => void;
   /** The editor reporting that its file failed to open or to save itself — or recovered. */
   failFile: (fileId: string, failure: FileFailure | null) => void;
+  /** The user zooming a document inside its editor. */
+  zoom: (fileId: string, zoom: CanvasZoom) => void;
 }
 
 export interface TestCanvasAdapterOptions {
@@ -64,6 +67,7 @@ export function createTestCanvasAdapter(options: TestCanvasAdapterOptions = {}):
   let selectionListener: ((selection: CanvasSelection | null) => void) | null = null;
   let draftListener: ((action: "apply") => void) | null = null;
   let failureListener: ((fileId: string, failure: FileFailure | null) => void) | null = null;
+  let zoomListener: ((fileId: string, zoom: CanvasZoom) => void) | null = null;
 
   const mount = vi.fn((_host: HTMLElement) => {});
   const show = vi.fn((_file: FileMeta) => {});
@@ -121,6 +125,12 @@ export function createTestCanvasAdapter(options: TestCanvasAdapterOptions = {}):
         failureListener = null;
       };
     },
+    onZoomChange(listener) {
+      zoomListener = listener;
+      return () => {
+        zoomListener = null;
+      };
+    },
     ...(options.inPlace ? { canEditDocument: () => true, editDocument } : {}),
   };
 
@@ -139,5 +149,6 @@ export function createTestCanvasAdapter(options: TestCanvasAdapterOptions = {}):
     select: (selection) => selectionListener?.(selection),
     applyFromDocument: () => draftListener?.("apply"),
     failFile: (fileId, failure) => failureListener?.(fileId, failure),
+    zoom: (fileId, zoom) => zoomListener?.(fileId, zoom),
   };
 }

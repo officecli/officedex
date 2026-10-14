@@ -199,6 +199,18 @@ export interface DocumentEditResult {
  */
 export type CanvasToolbarProfile = "full" | "compact";
 
+/**
+ * How large the document page is drawn: a percentage, or one of the editor's
+ * fit-to-window modes. A fit mode is stored as a mode, not as the percentage it
+ * happened to work out to — the window decides that, not the user.
+ *
+ * Only the page: the client and the editor's own toolbar keep their size.
+ * Writer has both fit modes, a deck fits its slide to the window (`fit-page`),
+ * and a workbook has percentages only; an editor shown a mode it lacks keeps
+ * its own default.
+ */
+export type CanvasZoom = number | "fit-width" | "fit-page";
+
 export interface CanvasShowOptions {
   /**
    * Which toolbar to lay out. Advisory: an adapter that keeps an editor alive
@@ -207,6 +219,12 @@ export interface CanvasShowOptions {
    * means rebuilding it and losing the document's state.
    */
   toolbarProfile?: CanvasToolbarProfile;
+  /**
+   * The zoom the file's page opens at (UI-14). Applied once its editor is up;
+   * an editor already showing the file keeps the zoom it has, because the user
+   * may have changed it since.
+   */
+  zoom?: CanvasZoom;
 }
 
 export interface CanvasAdapter {
@@ -275,6 +293,15 @@ export interface CanvasAdapter {
    * only thing that knows. Nothing else in the app can tell that a user typed.
    */
   onDirtyChange(listener: (dirty: boolean) => void): () => void;
+  /**
+   * The user changed a document's zoom. Returns unsubscribe.
+   *
+   * Only the user's changes: an editor applying the zoom it was shown with,
+   * or a fit mode following a window resize, says nothing — otherwise every
+   * file opened once would be remembered at whatever the editor started on.
+   * Optional; an editor without zoom has nothing to report.
+   */
+  onZoomChange?(listener: (fileId: string, zoom: CanvasZoom) => void): () => void;
   /**
    * The editor could not open its file, or a save it ran on its own did not
    * reach the disk — or, with `null`, the file is fine again. Returns

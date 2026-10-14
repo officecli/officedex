@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SheetSDKOptions } from "@shimo/sdk-sheet";
+import type { AbstractedSheetSDK, SheetSDKOptions } from "@shimo/sdk-sheet";
 
 const mocks = vi.hoisted(() => {
   const editor = {
@@ -18,8 +22,12 @@ vi.mock("@shimo/sdk-sheet", () => ({ createSheetSDK: mocks.createSheetSDK }));
 vi.mock("@shimo/simple-i18n", () => ({ getS18n: mocks.getS18n }));
 
 import {
+  applySheetZoomPercent,
   createOfflineSheetEditor,
   installRatioValidationCompatibility,
+  readSheetZoomPercent,
+  SHEET_ZOOMED_EVENT,
+  subscribeSheetZoom,
   OfflineImageUploader,
   registerOfflineImage,
   resetOfflineSheetEditorLoader,
@@ -275,5 +283,61 @@ describe("createOfflineSheetEditor", () => {
         }),
       }),
     ]);
+  });
+});
+
+describe("workbook zoom", () => {
+  function runtimeEditor(initial: number) {
+    let factor = initial;
+    const handlers = new Map<string, Set<() => void>>();
+    const changeSheetZoom = vi.fn((next: number) => {
+      factor = next;
+      for (const handler of handlers.get(SHEET_ZOOMED_EVENT) ?? []) handler();
+    });
+    const editor = {
+      __editor: {
+        spread: {
+          coreBook: {
+            bind: (event: string, handler: () => void) => {
+              handlers.set(event, (handlers.get(event) ?? new Set()).add(handler));
+            },
+            unbind: (event: string, handler: () => void) => handlers.get(event)?.delete(handler),
+          },
+          getActiveSheet: () => ({
+            coreSheet: { zoom: () => factor },
+            commandManager: { command__changeSheetZoom: changeSheetZoom },
+          }),
+        },
+      },
+    } as unknown as AbstractedSheetSDK;
+    return { editor, changeSheetZoom, handlers };
+  }
+
+  it("pins the SheetZoomed event id to the installed SDK", () => {
+    // The SDK does not export its event names; if an upgrade renumbers this
+    // one, user zoom stops being remembered without any other symptom.
+    const entry = createRequire(import.meta.url).resolve("@shimo/sdk-sheet");
+    const bundle = readFileSync(join(dirname(entry), "index.js"), "utf8");
+    expect(bundle).toContain(`SheetZoomed="${SHEET_ZOOMED_EVENT}"`);
+  });
+
+  it("zooms the workbook through the SDK command, reads it back as a percentage and hears every zoom", () => {
+    const { editor, changeSheetZoom, handlers } = runtimeEditor(1);
+    expect(readSheetZoomPercent(editor)).toBe(100);
+    const listener = vi.fn();
+    const unsubscribe = subscribeSheetZoom(editor, listener);
+    applySheetZoomPercent(editor, 80);
+    expect(changeSheetZoom).toHaveBeenCalledWith(0.8);
+    expect(readSheetZoomPercent(editor)).toBe(80);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    expect(handlers.get(SHEET_ZOOMED_EVENT)?.size).toBe(0);
+  });
+
+  it("does nothing on an editor without the runtime spread", () => {
+    const bare = {} as AbstractedSheetSDK;
+    expect(readSheetZoomPercent(bare)).toBeNull();
+    expect(() => applySheetZoomPercent(bare, 80)).not.toThrow();
+    expect(subscribeSheetZoom(bare, vi.fn())).toBeTypeOf("function");
   });
 });

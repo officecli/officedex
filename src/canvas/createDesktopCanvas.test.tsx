@@ -327,6 +327,27 @@ describe("desktop canvas adapter", () => {
     await cancelled;
   });
 
+  it("hands each editor its opening zoom and reports the user's zoom against the file it belongs to", () => {
+    const { adapter } = mounted();
+    const zooms: Array<[string, unknown]> = [];
+    adapter.onZoomChange?.((fileId, zoom) => zooms.push([fileId, zoom]));
+
+    act(() => adapter.show(file("deck-1"), { zoom: 80 }));
+    expect(lastProps?.zoom).toBe(80);
+    const reportDeck1 = lastProps?.onZoomChange as (zoom: unknown) => void;
+
+    act(() => adapter.show(file("doc-1", "doc"), { zoom: "fit-width" }));
+    expect(lastDocProps?.zoom).toBe("fit-width");
+    // A late report from the deck is still the deck's, not the document now open.
+    act(() => reportDeck1(110));
+    (lastDocProps?.onZoomChange as (zoom: unknown) => void)(140);
+    expect(zooms).toEqual([["deck-1", 110], ["doc-1", 140]]);
+
+    // A rebuilt editor comes back where the user left it, without a new show.
+    act(() => adapter.reopen?.(file("doc-1", "doc")));
+    expect(lastDocProps?.zoom).toBe(140);
+  });
+
   it("fans file failures out to subscribers", () => {
     const { adapter } = mounted();
     const heard: unknown[] = [];

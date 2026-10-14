@@ -6,7 +6,7 @@ import { SpreadsheetCanvas, type SpreadsheetCanvasHandle } from "../renderer/spr
 import type { WorkbookSelectionSnapshot } from "../renderer/spreadsheet/workbookClientTools";
 import type { Artifact, DesktopAPI, PreviewGrant } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
-import type { CanvasSelection } from "../shell/editor/canvasContract";
+import type { CanvasSelection, CanvasZoom } from "../shell/editor/canvasContract";
 import { SHEET_CHROME, useEditorChrome } from "./editorChrome";
 
 /**
@@ -53,6 +53,13 @@ export interface SheetCanvasProps {
   onSave: (save: (() => Promise<void>) | null) => void;
   /** The editor could not load at all — the caller falls back to a skeleton. */
   onUnavailable: (reason: string) => void;
+  /**
+   * The zoom the workbook opens at. A workbook has percentages only, so a fit
+   * mode leaves it at the editor's own zoom.
+   */
+  zoom?: CanvasZoom;
+  /** The user zoomed the workbook. */
+  onZoomChange?: (zoom: CanvasZoom) => void;
 }
 
 interface Session {
@@ -86,6 +93,8 @@ export function SheetCanvas({
   onResolveSelection,
   onSave,
   onUnavailable,
+  zoom,
+  onZoomChange,
 }: SheetCanvasProps) {
   const [session, setSession] = useState<Session | null>(null);
   const handleRef = useRef<SpreadsheetCanvasHandle | null>(null);
@@ -195,6 +204,8 @@ export function SheetCanvas({
         artifact={session.artifact}
         grant={session.grant}
         onDirtyChange={onDirtyChange}
+        zoomPercent={typeof zoom === "number" ? zoom : undefined}
+        onZoomChange={onZoomChange}
         onSelectionChange={(address) => {
           // A workbook always has an active cell, so "nothing selected" is not
           // a state the user can be in — what matters is whether they picked a

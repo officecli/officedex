@@ -5,7 +5,7 @@ import { LocaleProvider, translate } from "../renderer/i18n";
 import type { FileFailure } from "../shared/fileFailure";
 import type { DesktopAPI } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
-import type { CanvasAdapter, CanvasSelection, CanvasToolbarProfile } from "../shell/editor/canvasContract";
+import type { CanvasAdapter, CanvasSelection, CanvasToolbarProfile, CanvasZoom } from "../shell/editor/canvasContract";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { CanvasTaskStore } from "./CanvasTaskStore";
 import { CanvasContent } from "./CanvasContent";
@@ -97,6 +97,16 @@ export function createDesktopCanvas({
    */
   let toolbarProfile: CanvasToolbarProfile = "full";
   /**
+   * The zoom the next editor for `current` opens at.
+   *
+   * Taken from every `show` and only read by an editor as it mounts, so an
+   * editor already up keeps the zoom the user gave it. Updated by the user's
+   * own changes too: `reopen` and `invalidate` rebuild the editor without a
+   * new `show`, and the rebuilt one should come back where the user left it.
+   */
+  let zoom: CanvasZoom | undefined;
+  const zoomListeners = new Set<(fileId: string, zoom: CanvasZoom) => void>();
+  /**
    * How the editor showing right now writes itself to disk, or null when none
    * is. Generalised from a presentation controller because each editor hands
    * back a different handle — a deck gives a controller, Writer gives the same
@@ -137,6 +147,11 @@ export function createDesktopCanvas({
   const announceDirty = (dirty: boolean) => {
     lastDirty = dirty;
     for (const listener of dirtyListeners) listener(dirty);
+  };
+
+  const announceZoom = (fileId: string, next: CanvasZoom) => {
+    if (current?.id === fileId) zoom = next;
+    for (const listener of zoomListeners) listener(fileId, next);
   };
 
   const announceFailure = (fileId: string, failure: FileFailure | null) => {
@@ -209,6 +224,8 @@ export function createDesktopCanvas({
             onUnavailable={onUnavailable}
             openAttempt={openAttempt}
             toolbarProfile={toolbarProfile}
+            zoom={zoom}
+            onZoomChange={announceZoom}
             demo={demoRequested}
             demoStartedAt={demoStartedAt}
             onDemoSuperseded={onDemoSuperseded}
@@ -238,6 +255,7 @@ export function createDesktopCanvas({
         if (waiter.fileId !== file.id) waiter.reject(new Error(translate("shell.edit.aborted")));
       }
       toolbarProfile = options?.toolbarProfile ?? "full";
+      zoom = options?.zoom;
       // A different document is a different editor, so the handle the old one
       // left behind is stale — and stale in the dangerous direction: `save()`
       // would write the document the user just switched away from. Clearing on
@@ -357,6 +375,7 @@ export function createDesktopCanvas({
       selectionListeners.clear();
       dirtyListeners.clear();
       failureListeners.clear();
+      zoomListeners.clear();
       // Synchronously, so the host node is free before anything mounts into it
       // again. It used to be deferred to a microtask, and a mount that followed
       // immediately — StrictMode does exactly that — found the old root still
@@ -390,6 +409,11 @@ export function createDesktopCanvas({
     onFileFailure(listener) {
       failureListeners.add(listener);
       return () => failureListeners.delete(listener);
+    },
+
+    onZoomChange(listener) {
+      zoomListeners.add(listener);
+      return () => zoomListeners.delete(listener);
     },
 
     async save(fileId) {

@@ -19,6 +19,44 @@ afterEach(cleanup);
  * layout change the shell can make. If someone reintroduces a conditional
  * render around the document region, these fail immediately.
  */
+describe("EditorCanvasHost document zoom (UI-14)", () => {
+  afterEach(() => localStorage.removeItem("officedex.shell.documentView.v1"));
+
+  it("opens a file the user never zoomed at 80% and brings each file back at its own zoom", async () => {
+    const [first, second] = SEED_OPEN_FILE_IDS;
+    const canvas = createTestCanvasAdapter();
+    const shell = await renderShell({ canvas: canvas.adapter });
+    await shell.dispatch({ type: "open-file", fileId: first! });
+    expect(canvas.show.mock.calls.at(-1)?.[1]).toMatchObject({ zoom: 80 });
+
+    canvas.zoom(first!, 125);
+    await shell.dispatch({ type: "open-file", fileId: second! });
+    expect(canvas.show.mock.calls.at(-1)?.[0].id).toBe(second);
+    expect(canvas.show.mock.calls.at(-1)?.[1]).toMatchObject({ zoom: 80 });
+    canvas.zoom(second!, "fit-page");
+
+    // Back on the first tab, and again after a trip Home: each keeps its own.
+    await shell.dispatch({ type: "activate-file", fileId: first! });
+    expect(canvas.show.mock.calls.at(-1)?.[1]).toMatchObject({ zoom: 125 });
+    await shell.dispatch({ type: "go", page: "home" });
+    await shell.dispatch({ type: "activate-file", fileId: second! });
+    expect(canvas.show.mock.calls.at(-1)?.[1]).toMatchObject({ zoom: "fit-page" });
+  });
+
+  it("remembers the zoom across a fresh shell, as on reopening the app", async () => {
+    const canvas = createTestCanvasAdapter();
+    const shell = await renderShell({ canvas: canvas.adapter });
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    canvas.zoom(SEED_ACTIVE_FILE_ID, 150);
+    cleanup();
+
+    const next = createTestCanvasAdapter();
+    const reopened = await renderShell({ canvas: next.adapter, keepStorage: true });
+    await reopened.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    expect(next.show.mock.calls.at(-1)?.[1]).toMatchObject({ zoom: 150 });
+  });
+});
+
 describe("EditorCanvasHost persistence", () => {
   it("selects the live stage explicitly and returns to a Local document", async () => {
     const canvas = createTestCanvasAdapter();
@@ -112,21 +150,21 @@ describe("EditorCanvasHost persistence", () => {
     await shell.dispatch({ type: "open-local-file", fileId: SEED_ACTIVE_FILE_ID });
     expect(canvas.show.mock.calls.at(-1)).toEqual([
       expect.objectContaining({ id: SEED_ACTIVE_FILE_ID }),
-      { toolbarProfile: "full" },
+      { toolbarProfile: "full", zoom: 80 },
     ]);
 
     await shell.dispatch({ type: "open-chat", chat: { folderId: SEED_FOLDER_ID, conversationId: null } });
     await shell.dispatch({ type: "open-file", fileId: "file-forecast" });
     expect(canvas.show.mock.calls.at(-1)).toEqual([
       expect.objectContaining({ id: "file-forecast" }),
-      { toolbarProfile: "compact" },
+      { toolbarProfile: "compact", zoom: 80 },
     ]);
 
     // Back to the Local tab: its context, and so its profile, come with it.
     await shell.dispatch({ type: "activate-file", fileId: SEED_ACTIVE_FILE_ID });
     expect(canvas.show.mock.calls.at(-1)).toEqual([
       expect.objectContaining({ id: SEED_ACTIVE_FILE_ID }),
-      { toolbarProfile: "full" },
+      { toolbarProfile: "full", zoom: 80 },
     ]);
   });
 

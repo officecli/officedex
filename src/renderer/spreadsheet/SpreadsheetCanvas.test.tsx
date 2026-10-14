@@ -157,13 +157,21 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("../bridge", () => ({ officecli: mocks.officecli }));
-vi.mock("./sheetSdk", async (importOriginal) => ({
-  // cellsLoadingMessages reads the SDK's i18n bundle and nothing else, so the
-  // retry tests exercise the real one; only the editor factory is stubbed.
-  cellsLoadingMessages: (await importOriginal<typeof import("./sheetSdk")>()).cellsLoadingMessages,
-  createOfflineSheetEditor: mocks.createOfflineSheetEditor,
-  registerOfflineImage: mocks.registerOfflineImage,
-}));
+vi.mock("./sheetSdk", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./sheetSdk")>();
+  return {
+    // cellsLoadingMessages reads the SDK's i18n bundle and nothing else, so the
+    // retry tests exercise the real one; only the editor factory is stubbed.
+    cellsLoadingMessages: actual.cellsLoadingMessages,
+    // The zoom helpers only reach into the editor they are handed, and do
+    // nothing on one without the SDK's runtime spread — as the stub is.
+    applySheetZoomPercent: actual.applySheetZoomPercent,
+    readSheetZoomPercent: actual.readSheetZoomPercent,
+    subscribeSheetZoom: actual.subscribeSheetZoom,
+    createOfflineSheetEditor: mocks.createOfflineSheetEditor,
+    registerOfflineImage: mocks.registerOfflineImage,
+  };
+});
 
 import {
   imageBytesToFile,
@@ -248,6 +256,42 @@ describe("SpreadsheetCanvas", () => {
       expect.any(Function),
       "en",
     );
+  });
+
+  it("opens the workbook at the shell's zoom and reports only the user's zoom", async () => {
+    // The SDK's runtime spread, which the stub editor otherwise lacks.
+    let factor = 1;
+    let zoomed: (() => void) | undefined;
+    const changeSheetZoom = vi.fn((next: number) => {
+      factor = next;
+      zoomed?.();
+    });
+    Object.assign(mocks.editor, {
+      __editor: {
+        spread: {
+          coreBook: {
+            bind: (_event: string, handler: () => void) => { zoomed = handler; },
+            unbind: () => { zoomed = undefined; },
+          },
+          getActiveSheet: () => ({ coreSheet: { zoom: () => factor }, commandManager: { command__changeSheetZoom: changeSheetZoom } }),
+        },
+      },
+    });
+    try {
+      const onZoomChange = vi.fn();
+      const view = render(<SpreadsheetCanvas artifact={artifact} grant={grant} zoomPercent={80} onZoomChange={onZoomChange} />);
+      await waitFor(() => expect(changeSheetZoom).toHaveBeenCalledWith(0.8));
+      expect(onZoomChange).not.toHaveBeenCalled();
+      // Switching sheets re-applies the same zoom: nothing new to report.
+      zoomed?.();
+      expect(onZoomChange).not.toHaveBeenCalled();
+      act(() => changeSheetZoom(1.25));
+      expect(onZoomChange).toHaveBeenCalledWith(125);
+      view.unmount();
+      expect(zoomed).toBeUndefined();
+    } finally {
+      delete (mocks.editor as { __editor?: unknown }).__editor;
+    }
   });
 
   it("mounts the sheet editor in the shell's language", async () => {

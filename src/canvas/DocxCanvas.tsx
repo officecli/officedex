@@ -6,10 +6,12 @@ import { isEditorRuntimeMissing } from "../shared/editorRuntime";
 import { describeFailure, type FileFailure } from "../shared/fileFailure";
 import { WriterEditorFrame, type WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { DesktopAPI } from "../shared/types";
+import type { WriterZoom } from "../shared/writerProtocol";
 import type { FileMeta } from "../shared/uiPort";
 import type {
   CanvasSelection,
   CanvasToolbarProfile,
+  CanvasZoom,
   DocumentEditRequest,
   DocumentEditResult,
 } from "../shell/editor/canvasContract";
@@ -40,6 +42,10 @@ export interface DocxCanvasProps {
    * first shown and fixed for the life of this editor; see `createDesktopCanvas`.
    */
   toolbarProfile?: CanvasToolbarProfile;
+  /** The zoom the document opens at; read once, when Writer comes up. */
+  zoom?: CanvasZoom;
+  /** The user zoomed the page inside Writer. */
+  onZoomChange?: (zoom: CanvasZoom) => void;
   onDirtyChange: (dirty: boolean) => void;
   /**
    * The caret moved. Reported twice for a range: at once with the label alone
@@ -97,6 +103,19 @@ interface Session {
  */
 const SELECTION_TEXT_SETTLE_MS = 150;
 
+/** The shell's zoom in Writer's terms: its two fit modes are the shell's two. */
+export function toWriterZoom(zoom: CanvasZoom): WriterZoom {
+  if (zoom === "fit-width") return { mode: "fit-page-width" };
+  if (zoom === "fit-page") return { mode: "fit-whole-page" };
+  return { mode: "percentage", percent: zoom };
+}
+
+export function fromWriterZoom(zoom: WriterZoom): CanvasZoom {
+  if (zoom.mode === "fit-page-width") return "fit-width";
+  if (zoom.mode === "fit-whole-page") return "fit-page";
+  return zoom.percent;
+}
+
 /** What the chip says, given what Writer is willing to tell us for free. */
 function selectionLabel(fileName: string, paragraphs: number | undefined): string {
   if (!paragraphs || paragraphs <= 1) return translate("shell.canvas.selection", { name: fileName });
@@ -107,6 +126,8 @@ export function DocxCanvas({
   api,
   file,
   toolbarProfile,
+  zoom,
+  onZoomChange,
   onDirtyChange,
   onSelectionChange,
   onResolveSelection,
@@ -195,6 +216,8 @@ export function DocxCanvas({
         sourcePath={session.filePath}
         fileName={session.fileName}
         toolbarProfile={toolbarProfile}
+        zoom={zoom === undefined ? undefined : toWriterZoom(zoom)}
+        onZoomChange={(next) => onZoomChange?.(fromWriterZoom(next))}
         onAgentReady={(editor) => {
           editorRef.current = editor;
           onEditor(editor);

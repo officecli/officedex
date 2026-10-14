@@ -13,7 +13,14 @@ import {
   type MarketingBatchDraft,
   type MarketingFieldMapping,
 } from "./marketingWorkflow";
-import { createOfflineSheetEditor, cellsLoadingMessages, registerOfflineImage } from "./sheetSdk";
+import {
+  applySheetZoomPercent,
+  cellsLoadingMessages,
+  createOfflineSheetEditor,
+  readSheetZoomPercent,
+  registerOfflineImage,
+  subscribeSheetZoom,
+} from "./sheetSdk";
 import type { CatalogCleanupBatch, CatalogInspection, CatalogSelection } from "./catalogCleanupWorkflow";
 import type {
   WorkbookAddChartRequest,
@@ -76,6 +83,14 @@ export interface SpreadsheetCanvasProps {
   onSaveError?: (error?: string) => void;
   onSessionClosed?: (previewToken: string) => void;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /**
+   * The zoom the workbook opens at, as a percentage. Applied once the editor
+   * is ready — explicitly, because the SDK's own remembered zoom is not per
+   * workbook — and not again for the life of the editor.
+   */
+  zoomPercent?: number;
+  /** The user zoomed the workbook. Applying `zoomPercent` is not reported. */
+  onZoomChange?: (percent: number) => void;
   /** Forwarded to the shared idle autosave window; tests only. */
   autosaveIdleMs?: number;
 }
@@ -256,7 +271,7 @@ export function styledCellData(existing: SheetCellData | undefined, style: Workb
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
-  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed, onFlushReady, autosaveIdleMs }, ref) {
+  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed, onFlushReady, zoomPercent, onZoomChange, autosaveIdleMs }, ref) {
   const api = useDesktopApi();
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
@@ -289,14 +304,16 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const catalogSelectionChangedRef = useRef(false);
     const catalogProgrammaticSelectionUntilRef = useRef(0);
     const markerFrameRef = useRef<number | undefined>(undefined);
-    const callbacksRef = useRef({ onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed });
+    const callbacksRef = useRef({ onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed, onZoomChange });
+    const zoomPercentRef = useRef(zoomPercent);
+    zoomPercentRef.current = zoomPercent;
     const [state, setState] = useState<SpreadsheetCanvasState>("loading");
     const [prepareError, setPrepareError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [headerMarkers, setHeaderMarkers] = useState<HeaderMarkerPosition[]>([]);
     const [catalogRange, setCatalogRange] = useState<CatalogRangePosition>();
 
-    callbacksRef.current = { onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed };
+    callbacksRef.current = { onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed, onZoomChange };
     latestGrantTokenRef.current = grant.token;
 
     const publishState = useCallback((nextState: SpreadsheetCanvasState) => {
@@ -599,6 +616,24 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             editor.eventSubscription.addViewportSizeChangedListener(scheduleOverlays),
             editor.eventSubscription.addUrlChangedListener(scheduleOverlays),
             editor.activeSheet.addRangeListener(handleRangeChanged),
+          );
+          /*
+           * The workbook opens at the shell's zoom, set here explicitly: left
+           * to itself the SDK opens at whatever it last remembered, which is
+           * one value shared by every workbook. What is on screen after that
+           * is the baseline, and only a zoom that differs from it — the user's
+           * — is reported; switching sheets re-applies the same zoom and says
+           * nothing new.
+           */
+          if (zoomPercentRef.current !== undefined) applySheetZoomPercent(loaded, zoomPercentRef.current);
+          let zoomBaseline = readSheetZoomPercent(loaded);
+          viewUnsubscribers.push(
+            subscribeSheetZoom(loaded, () => {
+              const percent = readSheetZoomPercent(loaded);
+              if (percent === null || percent === zoomBaseline) return;
+              zoomBaseline = percent;
+              callbacksRef.current.onZoomChange?.(percent);
+            }),
           );
           publishState("clean");
           scheduleHeaderMarkerLayout();

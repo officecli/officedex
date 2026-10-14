@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import type { DesktopAPI, DesktopTask } from "../shared/types";
 import type { FileFailure } from "../shared/fileFailure";
 import type { FileMeta } from "../shared/uiPort";
-import type { CanvasSelection, CanvasToolbarProfile } from "../shell/editor/canvasContract";
+import type { CanvasSelection, CanvasToolbarProfile, CanvasZoom } from "../shell/editor/canvasContract";
 import type { WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { NEXAEDGE_DEMO_ID } from "../renderer/presentation/bundledPptxDemo";
@@ -46,6 +46,10 @@ export interface CanvasContentProps {
   openAttempt?: number;
   /** Which toolbar the Word leaf lays out; a deck and a workbook keep their full chrome. */
   toolbarProfile?: CanvasToolbarProfile;
+  /** The zoom the open file's editor starts at; read once, when it mounts. */
+  zoom?: CanvasZoom;
+  /** The user changed the zoom of the file named; see `CanvasAdapter.onZoomChange`. */
+  onZoomChange?: (fileId: string, zoom: CanvasZoom) => void;
   /**
    * How to rewrite part of the open document in place, or null when whatever
    * is on screen cannot be edited that way — which is everything except Word.
@@ -111,6 +115,8 @@ export function CanvasContent({
   onSaveCopy,
   openAttempt = 0,
   toolbarProfile,
+  zoom,
+  onZoomChange,
   onEditRunner,
   onUnavailable,
   onDemoSuperseded,
@@ -221,6 +227,11 @@ export function CanvasContent({
 
   if (!open) return null;
 
+  // Bound to the file it belongs to, so a report that lands after a tab switch
+  // is never filed under the document that replaced it.
+  const openId = open.id;
+  const reportZoom = (next: CanvasZoom) => onZoomChange?.(openId, next);
+
   if (open.type === "slides") {
     return (
       <PresentationCanvas
@@ -235,6 +246,8 @@ export function CanvasContent({
         }
         onEditRunner={onEditRunner}
         onUnavailable={onUnavailable}
+        zoom={zoom}
+        onZoomChange={reportZoom}
       />
     );
   }
@@ -254,6 +267,8 @@ export function CanvasContent({
         onResolveSelection={onResolveSelection}
         onSave={onSave}
         onUnavailable={onUnavailable}
+        zoom={zoom}
+        onZoomChange={reportZoom}
       />
     );
   }
@@ -274,6 +289,8 @@ export function CanvasContent({
       onEditRunner={onEditRunner}
       onFileFailure={onFileFailure}
       onUnavailable={onUnavailable}
+      zoom={zoom}
+      onZoomChange={reportZoom}
     />
   );
 }

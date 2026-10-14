@@ -8,7 +8,7 @@ import {
   presentationSelectionLabel,
   type PresentationSelection,
 } from "../shared/presentationSelection";
-import type { CanvasSelection } from "../shell/editor/canvasContract";
+import type { CanvasSelection, CanvasZoom } from "../shell/editor/canvasContract";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { PresentationEditorFrame, type PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { logShellEvent } from "../shell/port/shellLog";
@@ -46,6 +46,13 @@ export interface PresentationCanvasProps {
    * (`office.pptx.plan_js`) and the script it returns is run by this editor.
    */
   onEditRunner: (edit: DocumentEditRunner | null) => void;
+  /**
+   * The zoom the deck opens at. A deck fits its slide to the window, which is
+   * the shell's `fit-page`; it has no page-width fit, so that reads as fitted too.
+   */
+  zoom?: CanvasZoom;
+  /** The user zoomed the slide. */
+  onZoomChange?: (zoom: CanvasZoom) => void;
   /** The editor could not load at all — the caller falls back to a skeleton. */
   onUnavailable: (reason: string) => void;
 }
@@ -67,6 +74,8 @@ export function PresentationCanvas({
   onController,
   onEditRunner,
   onUnavailable,
+  zoom,
+  onZoomChange,
 }: PresentationCanvasProps) {
   const [session, setSession] = useState<Session | null>(null);
   const controllerRef = useRef<PresentationEditorController | null>(null);
@@ -215,6 +224,8 @@ export function PresentationCanvas({
         fileName={session.fileName}
         onDirtyChange={onDirtyChange}
         onSelectionChanged={() => selectionHintRef.current?.()}
+        zoom={zoom === undefined ? undefined : typeof zoom === "number" ? zoom : "fit"}
+        onZoomChange={(next) => onZoomChange?.(next === "fit" ? "fit-page" : next)}
         onController={(controller) => {
           controllerRef.current = controller;
           onController(controller);

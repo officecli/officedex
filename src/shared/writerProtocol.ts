@@ -53,8 +53,29 @@ export interface WriterSelectionContent extends WriterSelectionSummary {
  */
 export type WriterToolbarProfile = "full" | "compact";
 
+/**
+ * How large Writer draws the page: a percentage, or one of its two fit modes.
+ * A fit mode carries no percentage — the window decides that, not the user.
+ *
+ * Additive to protocol version 1, like the selection messages: an older embed
+ * ignores `writer:set-zoom` and opens fitted to the page width as it always
+ * did, and never sends `writer:zoom-changed`.
+ */
+export type WriterZoom =
+  | { readonly mode: "percentage"; readonly percent: number }
+  | { readonly mode: "fit-page-width" }
+  | { readonly mode: "fit-whole-page" };
+
 export type WriterHostCommand =
   | { type: "writer:toolbar-profile"; profile: "compact" | "full" }
+  | {
+      /**
+       * The zoom the host wants. Sent before `writer:load` it is the zoom the
+       * document opens at; sent later it applies at once.
+       */
+      type: "writer:set-zoom";
+      zoom: WriterZoom;
+    }
   | { type: "writer:capture-edit"; requestId: string; scope: "selection" | "document" }
   | { type: "writer:apply-edit"; requestId: string; id: string; edits: { query: string; replacement: string }[] }
   | {
@@ -101,6 +122,8 @@ export type WriterEmbedEvent =
   | { type: "writer:document-loaded"; fileName: string }
   | { type: "writer:dirty-changed"; dirty: boolean }
   | { type: "writer:selection-changed"; selection: WriterSelectionSummary }
+  /** The user changed the zoom. Opening at the host's zoom is not reported. */
+  | { type: "writer:zoom-changed"; zoom: WriterZoom }
   | {
       type: "writer:save";
       requestId: string;

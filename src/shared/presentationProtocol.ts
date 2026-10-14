@@ -1,6 +1,23 @@
 export const PRESENTATION_EMBED_PROTOCOL_VERSION = 1;
 
+/**
+ * How large the slide is drawn: a percentage of its actual size, or fitted to
+ * the window. Fitted carries no percentage — the window decides that.
+ *
+ * Additive to protocol version 1: an older embed ignores `presentation:set-zoom`
+ * and opens fitted as it always did, and never reports a change.
+ */
+export type PresentationZoom = number | "fit";
+
 export type PresentationHostCommand =
+  | {
+      /**
+       * The zoom the host wants. Applied when the editor's workbench mounts,
+       * or at once when it already has.
+       */
+      type: "presentation:set-zoom";
+      zoom: PresentationZoom;
+    }
   | {
       type: "presentation:load";
       protocolVersion: number;
@@ -86,6 +103,11 @@ export type PresentationEmbedEvent =
     }
   | { type: "presentation:embed-error"; error?: string }
   | { type: "presentation:dirty-changed"; dirty: boolean }
+  /**
+   * The user changed the zoom. Opening at the host's zoom is not reported, and
+   * neither is a fitted slide following the window.
+   */
+  | { type: "presentation:zoom-changed"; zoom: PresentationZoom }
   | {
       /**
        * The user clicked or typed inside the editor, so what is selected may

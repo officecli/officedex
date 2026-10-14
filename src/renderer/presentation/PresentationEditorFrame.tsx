@@ -6,6 +6,7 @@ import {
   PRESENTATION_EMBED_PROTOCOL_VERSION,
   type PresentationEmbedEvent,
   type PresentationHostCommand,
+  type PresentationZoom,
 } from "../../shared/presentationProtocol";
 import { getCurrentLocale } from "../i18n";
 import { useCanvasLocale, withEmbedLocaleQuery } from "../../shell/editor/canvasLocale";
@@ -87,6 +88,14 @@ export interface PresentationEditorFrameProps {
    * Debounced by the embed; the caller decides whether to go and read it.
    */
   onSelectionChanged?: () => void;
+  /**
+   * The zoom the deck opens at. Read when the embed says hello, so a change
+   * afterwards does not move a slide the user may have zoomed since. Absent
+   * keeps the editor's own opening: fitted to the window.
+   */
+  zoom?: PresentationZoom;
+  /** The user changed the zoom inside the editor. */
+  onZoomChange?: (zoom: PresentationZoom) => void;
   onUnavailable: (error?: string) => void;
   onReady?: () => void;
   onController?: (controller: PresentationEditorController | null) => void;
@@ -138,6 +147,8 @@ function PresentationEditorSession({
   fileName,
   onDirtyChange,
   onSelectionChanged,
+  zoom,
+  onZoomChange,
   onUnavailable,
   onReady,
   onController,
@@ -165,13 +176,15 @@ function PresentationEditorSession({
   /** The embed completed its handshake, so the boot deadline no longer applies. */
   const readyRef = useRef(false);
   const unavailableRef = useRef(false);
-  const callbacksRef = useRef({ onDirtyChange, onSelectionChanged, onUnavailable, onReady, onController, onSaved });
+  const callbacksRef = useRef({ onDirtyChange, onSelectionChanged, onZoomChange, onUnavailable, onReady, onController, onSaved });
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   // One ledger for every request/reply pair with the frame (scripts, swaps);
   // see shared/embedRequests.ts.
   const requestsRef = useRef(new PendingRequests({ idPrefix: "presentation" }));
   const [componentURL, setComponentURL] = useState<string>();
 
-  callbacksRef.current = { onDirtyChange, onSelectionChanged, onUnavailable, onReady, onController, onSaved };
+  callbacksRef.current = { onDirtyChange, onSelectionChanged, onZoomChange, onUnavailable, onReady, onController, onSaved };
 
   useEffect(() => {
     disposedRef.current = false;
@@ -370,6 +383,8 @@ function PresentationEditorSession({
                 return { file_path: result.filePath, revision: result.revision, saved: true };
               },
             });
+            // Ahead of the deck, so the zoom is waiting when its workbench mounts.
+            if (zoomRef.current !== undefined) post({ type: "presentation:set-zoom", zoom: zoomRef.current });
             const content = toTransferableBuffer(prepared.content);
             const assets = (prepared.assets ?? []).map((asset: PptxEditorAsset) => ({
               path: asset.path,
@@ -435,6 +450,9 @@ function PresentationEditorSession({
           return;
         case "presentation:selection-changed":
           callbacksRef.current.onSelectionChanged?.();
+          return;
+        case "presentation:zoom-changed":
+          callbacksRef.current.onZoomChange?.(event.zoom);
           return;
         case "presentation:save-snapshot":
           try {

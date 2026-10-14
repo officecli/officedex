@@ -47,9 +47,57 @@ interface RuntimeSheetSDK extends AbstractedSheetSDK {
     spread?: {
       coreBook?: {
         sheets?: RuntimeCoreSheet[] | { forEach: (callback: (sheet: RuntimeCoreSheet) => void) => void };
+        bind?: (event: string, handler: () => void) => void;
+        unbind?: (event: string, handler: () => void) => void;
       };
+      getActiveSheet?: () => {
+        coreSheet?: { zoom?: () => number };
+        commandManager?: { command__changeSheetZoom?: (factor: number) => void };
+      } | null;
     };
   };
+}
+
+/**
+ * The workbook's "a sheet was zoomed" event, `Core.Events.names.SheetZoomed`.
+ *
+ * The SDK does not export its event names, and this is the one event every way
+ * of zooming ends in — the zoom menu, the status-bar control, ⌘-scroll — so it
+ * is pinned here and checked against the installed bundle by sheetSdk.test.ts.
+ */
+export const SHEET_ZOOMED_EVENT = "common_ev42";
+
+/** The workbook's zoom as a whole percentage, or null when there is no sheet to ask. */
+export function readSheetZoomPercent(editor: AbstractedSheetSDK): number | null {
+  try {
+    const factor = (editor as RuntimeSheetSDK).__editor?.spread?.getActiveSheet?.()?.coreSheet?.zoom?.();
+    return typeof factor === "number" && Number.isFinite(factor) ? Math.round(factor * 100) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Zooms the whole workbook. Through the zoom menu's own command rather than a
+ * sheet's `zoom()`: the command sets every sheet, so switching sheets keeps the
+ * zoom, and it is a view change — nothing about it lands in the document.
+ */
+export function applySheetZoomPercent(editor: AbstractedSheetSDK, percent: number): void {
+  if (!Number.isFinite(percent) || percent <= 0) return;
+  try {
+    (editor as RuntimeSheetSDK).__editor?.spread?.getActiveSheet?.()?.commandManager?.command__changeSheetZoom?.(percent / 100);
+  } catch {
+    // A zoom that cannot be applied leaves the workbook at the SDK's own.
+  }
+}
+
+/** Calls `listener` whenever a sheet is zoomed, by whatever means. Returns unsubscribe. */
+export function subscribeSheetZoom(editor: AbstractedSheetSDK, listener: () => void): () => void {
+  const coreBook = (editor as RuntimeSheetSDK).__editor?.spread?.coreBook;
+  if (typeof coreBook?.bind !== "function") return () => undefined;
+  const handler = () => listener();
+  coreBook.bind(SHEET_ZOOMED_EVENT, handler);
+  return () => coreBook.unbind?.(SHEET_ZOOMED_EVENT, handler);
 }
 
 function normalizedRatioValue(value: unknown): string | null {

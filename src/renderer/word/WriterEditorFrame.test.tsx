@@ -60,6 +60,26 @@ describe("WriterEditorFrame agent tools", () => {
     expect(frame.src).toBe(source);
     expect(posted.filter((entry) => entry.type === "writer:load")).toHaveLength(1);
   });
+  it("sends the opening zoom ahead of the document and hands the user's zoom back", async () => {
+    mockManifest();
+    const onZoomChange = vi.fn();
+    const props = { previewToken: "token", fileName: "report.docx", onUnavailable: vi.fn(), onZoomChange };
+    const view = render(<WriterEditorFrame {...props} zoom={{ mode: "percentage", percent: 80 }} />);
+    await waitFor(() => expect(view.container.querySelector("iframe")).not.toBeNull());
+    const { posted, fromEmbed } = captureFrame(view.container);
+    fromEmbed({ type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+    await waitFor(() => expect(posted.some((entry) => entry.type === "writer:load")).toBe(true));
+    const zoomAt = posted.findIndex((entry) => entry.type === "writer:set-zoom");
+    expect(posted[zoomAt]).toEqual({ type: "writer:set-zoom", zoom: { mode: "percentage", percent: 80 } });
+    expect(zoomAt).toBeLessThan(posted.findIndex((entry) => entry.type === "writer:load"));
+
+    // Shown again with the zoom the user just chose: the open page is not moved.
+    view.rerender(<WriterEditorFrame {...props} zoom={{ mode: "percentage", percent: 120 }} />);
+    expect(posted.filter((entry) => entry.type === "writer:set-zoom")).toHaveLength(1);
+    fromEmbed({ type: "writer:zoom-changed", zoom: { mode: "fit-whole-page" } });
+    await waitFor(() => expect(onZoomChange).toHaveBeenCalledWith({ mode: "fit-whole-page" }));
+  });
+
   it("exposes captured editing only after load and rejects pending edits on close", async () => {
     mockManifest();
     let editor: WriterAgentEditor | null = null;

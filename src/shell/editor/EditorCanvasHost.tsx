@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { useLocale, useT } from "../../renderer/i18n";
 import type { FileMeta } from "../../shared/uiPort";
+import { readDocumentZoom, writeDocumentZoom } from "../state/documentView";
 import { CanvasPlaceholder } from "./CanvasPlaceholder";
 import type { CanvasAdapter, CanvasToolbarProfile } from "./canvasContract";
 import { canvasLocaleTag, publishCanvasLocale } from "./canvasLocale";
@@ -159,6 +160,14 @@ export function EditorCanvasHost({
     };
   }, [adapter]);
 
+  /*
+   * Each document's zoom, kept per file (UI-14). The editor reports only what
+   * the user changed, so whatever arrives here is a choice worth keeping;
+   * `show` below hands it back whenever the file's editor is mounted again —
+   * a tab switch, a return to the conversation, a reopen.
+   */
+  useEffect(() => adapter?.onZoomChange?.(writeDocumentZoom), [adapter]);
+
   useEffect(() => {
     const active = mountedAdapter.current;
     if (!active) return;
@@ -169,7 +178,7 @@ export function EditorCanvasHost({
       active.showFileless({ demo: true, demoStartedAt });
     }
     else if (visible && stage && !file && active.showFileless) active.showFileless({ demo: false });
-    else if (visible && file) active.show(file, { toolbarProfile });
+    else if (visible && file) active.show(file, { toolbarProfile, zoom: readDocumentZoom(file.id) });
     else active.hide();
   }, [adapter, demoStartedAt, file, fileless, stage, toolbarProfile, visible]);
 

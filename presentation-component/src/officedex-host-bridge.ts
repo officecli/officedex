@@ -639,6 +639,137 @@ export function createEditorSaveBridge(
   };
 }
 
+/** Mirrors `PresentationZoom` in `src/shared/presentationProtocol.ts`. */
+export type EditorZoom = number | "fit";
+
+/**
+ * What the zoom bridge needs from a mounted workbench: the editor facade's view
+ * controller (`editorFacade.views`), and the main area's zoom mode, which the
+ * controller does not expose — it is the one way to tell a fitted slide that a
+ * resize rescaled from a percentage the user picked.
+ */
+export interface EditorZoomWorkbench {
+  readonly editorFacade?: {
+    views?: {
+      getScale(): number;
+      setScale(scale: number): void;
+      zoomToFit(): void;
+      on(event: "zoomScaleDidChange", listener: () => void): () => void;
+    };
+  };
+  readonly core?: { view?: { mainArea?: { zoomMode?: "fit" | "custom" } } };
+}
+
+export interface EditorZoomBridge {
+  /** The host's zoom: applied to the mounted workbench, or kept for the next. */
+  set(zoom: EditorZoom): void;
+  dispose(): void;
+}
+
+function sameZoom(left: EditorZoom, right: EditorZoom): boolean {
+  return typeof left === "number" && typeof right === "number"
+    ? Math.round(left) === Math.round(right)
+    : left === right;
+}
+
+/**
+ * Opens each workbench at the host's zoom and reports the user's changes.
+ *
+ * A workbench mounts fitted to the window, so the host's zoom is applied when
+ * it says it is ready. What is on screen after that is the baseline; only a
+ * zoom that differs from it is the user's. A fitted slide reports as `"fit"`
+ * however the window rescales it — a resize is not a choice.
+ */
+export function createEditorZoomBridge(
+  target: Pick<Window, "addEventListener" | "removeEventListener">,
+  post: (message: { type: "presentation:zoom-changed"; zoom: EditorZoom }) => void,
+): EditorZoomBridge {
+  let expected: EditorZoom | undefined;
+  let workbench: EditorZoomWorkbench | undefined;
+  let baseline: EditorZoom | undefined;
+  let unsubscribe: (() => void) | undefined;
+
+  const current = (): EditorZoom | undefined => {
+    const views = workbench?.editorFacade?.views;
+    if (!views) return undefined;
+    if (workbench?.core?.view?.mainArea?.zoomMode === "fit") return "fit";
+    const scale = views.getScale();
+    return Number.isFinite(scale) ? Math.round(scale * 100) : undefined;
+  };
+
+  const observe = () => {
+    const zoom = current();
+    if (zoom === undefined) return;
+    if (baseline === undefined) {
+      if (expected === undefined || sameZoom(zoom, expected)) baseline = zoom;
+      return;
+    }
+    if (sameZoom(zoom, baseline)) return;
+    baseline = zoom;
+    // A workbench mounted later (a swap) opens where the user left this one.
+    expected = zoom;
+    post({ type: "presentation:zoom-changed", zoom });
+  };
+
+  const apply = () => {
+    const views = workbench?.editorFacade?.views;
+    if (!views || expected === undefined) return;
+    if (expected === "fit") views.zoomToFit();
+    else views.setScale(expected / 100);
+  };
+
+  const onReady = (event: Event) => {
+    const detail = (event as CustomEvent<{ workbench?: EditorZoomWorkbench } | undefined>).detail;
+    unsubscribe?.();
+    workbench = detail?.workbench;
+    baseline = undefined;
+    unsubscribe = workbench?.editorFacade?.views?.on("zoomScaleDidChange", observe);
+    apply();
+    observe();
+  };
+
+  const onDetached = (event: Event) => {
+    const detail = (event as CustomEvent<{ workbench?: object } | undefined>).detail;
+    if (!workbench || (detail?.workbench && detail.workbench !== workbench)) return;
+    unsubscribe?.();
+    unsubscribe = undefined;
+    workbench = undefined;
+  };
+
+  target.addEventListener("officedex:pptx-workbench-ready", onReady);
+  target.addEventListener("officedex:pptx-workbench-detached", onDetached);
+
+  return {
+    set(zoom) {
+      expected = zoom;
+      baseline = undefined;
+      apply();
+      observe();
+    },
+    dispose() {
+      unsubscribe?.();
+      unsubscribe = undefined;
+      workbench = undefined;
+      target.removeEventListener("officedex:pptx-workbench-ready", onReady);
+      target.removeEventListener("officedex:pptx-workbench-detached", onDetached);
+    },
+  };
+}
+
+function isEditorZoom(value: unknown): value is EditorZoom {
+  return value === "fit" || (typeof value === "number" && Number.isFinite(value) && value > 0);
+}
+
+function installZoomBridge() {
+  const zoomBridge = createEditorZoomBridge(window, post);
+  window.addEventListener("message", (event: MessageEvent) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (message?.type !== "presentation:set-zoom" || !isEditorZoom(message.zoom)) return;
+    zoomBridge.set(message.zoom);
+  });
+}
+
 let saveBridge: EditorSaveBridge = {
   workbench: undefined,
   flush: () => Promise.reject(new Error("The presentation host bridge is not installed.")),
@@ -905,6 +1036,8 @@ export async function installOfficeDexPresentationBridge(): Promise<void> {
   // never missed; before the load, so a `presentation:flush` sent during the
   // boot waits for the workbench instead of being dropped.
   saveBridge = createEditorSaveBridge(window, post);
+  // Before the load too: the host sends its zoom ahead of the deck.
+  installZoomBridge();
   installFetchBridge();
   installScriptBridge();
   installDocumentSwapBridge();
