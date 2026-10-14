@@ -77,7 +77,7 @@ export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTa
           <button
             type="button"
             className="shell-task-button"
-            onClick={() => void retryImageRun(agent, agent.task, failure.prompt)}
+            onClick={() => void retryImageRun(agent, agent.task, failure.prompt, series.retryBaseFileId)}
           >
             <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
             {t("shell.imageWs.tryAgain")}

@@ -13,11 +13,16 @@ import type { useAgentTask } from "../agent/useAgentTask";
  * record keeps the prompt and not the options behind it, and the composer's
  * choices are the composer's state; reconstructing "4K, four pictures" from
  * nothing and charging for it again is a worse failure than the first one.
+ *
+ * What the run was *changing* is different: the series records it. A retry of
+ * "make the apple green" that forgot the apple would draw an unrelated picture
+ * in a new conversation and call that the answer.
  */
 export async function retryImageRun(
   agent: ReturnType<typeof useAgentTask>,
   task: AgentTask | null,
   prompt: string,
+  baseFileId: string | null = null,
 ): Promise<void> {
   if (!task || !prompt) return;
   await agent.send({
@@ -33,6 +38,7 @@ export async function retryImageRun(
       resolution: "2K",
       count: 1,
       style: "auto",
+      ...(baseFileId ? { baseFileId } : {}),
       prompt,
     },
   });
