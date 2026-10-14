@@ -1,6 +1,12 @@
 .spreadsheet-workspace__canvas { position: relative; min-width: 0; min-height: 0; flex: 1; overflow: hidden; background: var(--n-canvas); }
 
-.spreadsheet-canvas { position: relative; width: 100%; height: 100%; min-height: 0; }
+/*
+ * The sheet SDK mounts in the shell's own document (Word and PowerPoint are
+ * iframes) and stacks its layers at z-index 100–999. Without a context of its
+ * own those compete at the window's root and paint over the shell's menus and
+ * popovers — New opened over a workbook was there but unseen (1.0.34 N34-04).
+ */
+.spreadsheet-canvas { position: relative; isolation: isolate; width: 100%; height: 100%; min-height: 0; }
 .spreadsheet-canvas__editor { width: 100%; height: 100%; outline: none; }
 .spreadsheet-canvas__loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: var(--n-canvas); color: var(--n-steel); font-size: 12px; }
 .spreadsheet-canvas__loading svg { width: 36px; height: 36px; color: var(--n-secondary); stroke-width: 1.2; }
