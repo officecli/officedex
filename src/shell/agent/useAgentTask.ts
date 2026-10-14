@@ -85,7 +85,8 @@ export function hasExplicitFileTargets(submission: Pick<ComposerSubmission, "att
 export function useAgentTask() {
   const port = usePort();
   const canvas = useCanvas();
-  const { scopeFolderId, scope, reload, files, setChatMeta } = useShell();
+  const { scopeFolderId, scope, reload, files, setChatMeta, dispatch, state: shellState } = useShell();
+  const conversationOpen = shellState.chat !== null;
   const kind = scope.kind;
   // A project holds many conversations; the panel shows the addressed one.
   const conversationId = scope.kind === "conversation" ? scope.conversationId : null;
@@ -362,6 +363,18 @@ export function useAgentTask() {
       localSessions.current.delete(scopeKey);
       localSessions.current.delete(addressedScope);
       setLocalTask(null);
+      /*
+       * Creating a Word, Excel or PowerPoint file from a conversation opens
+       * its draft on the right straight away (1.0.12 §一, §四): the run's stage
+       * is that file's editor until the file exists, and the finished file
+       * replaces it in place rather than arriving as a tab beside Assets.
+       * Only an explicit ask counts — an output type, a template, or the
+       * words for a new file — never the fallback guess every prompt gets.
+       */
+      const createsOffice =
+        !submission.imageGeneration &&
+        (submission.documentType ? submission.documentType !== "img" : requestsNewFile(submission.text));
+      if (createsOffice && canvas && conversationOpen) dispatch({ type: "enter-stage" });
       await attempt(() =>
         port.agent.send({
           ...submission,
@@ -390,6 +403,8 @@ export function useAgentTask() {
       setChatMeta,
       settings.value.selectedModelId,
       settings.value.permission,
+      dispatch,
+      conversationOpen,
     ],
   );
 

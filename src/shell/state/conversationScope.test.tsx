@@ -15,8 +15,9 @@
  * moment it exists, and the shell says which one a message is for.
  */
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createTestCanvasAdapter } from "../editor/testCanvasAdapter";
 import { resetLayers } from "../kit/layers";
 import { PROTOTYPE_CHAT_IDS, PROTOTYPE_FOLDER_IDS, prototypeFiles, prototypeFolders, prototypeTasks } from "../port/fake/prototypeSeed";
 import { renderShell, type RenderShellOptions } from "../test/renderShell";
@@ -344,5 +345,27 @@ describe("opening a chat that has history", () => {
     expect(view.state()).toMatchObject({ page: "editor", activeFileId: null });
     expect(view.find("[data-view=chat-empty]")).not.toBeNull();
     expect(view.find("[data-view=chat-empty] [data-act=show-assets]")).not.toBeNull();
+  });
+});
+
+/** 1.0.12 §四: creating an Office file from a chat opens its draft at once. */
+describe("creating a document from a conversation", () => {
+  it("puts the draft on the right as soon as it is asked for", async () => {
+    const { adapter } = createTestCanvasAdapter();
+    const view = await shell({ canvas: adapter });
+    await view.dispatch({
+      type: "open-chat",
+      chat: { folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: PROTOTYPE_CHAT_IDS.sales },
+    });
+    const send = vi.fn().mockResolvedValue(undefined);
+    view.port.agent.send = send;
+
+    // An ordinary follow-up does not take the right-hand side.
+    await view.send(view.find("#dx-conversation")!, "What changed since last week?");
+    expect(view.state().stage).toBe(false);
+
+    await view.send(view.find("#dx-conversation")!, "Create a new presentation about the forecast");
+    expect(view.state()).toMatchObject({ page: "editor", stage: true, activeFileId: null });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });
