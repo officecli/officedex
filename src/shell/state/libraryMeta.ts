@@ -55,6 +55,26 @@ export interface ChatMeta {
   fileId?: string;
   /** Epoch ms, for ordering conversations that have no run to be ordered by. */
   createdAt?: number;
+  /**
+   * Started from a project's New chat (or a new project) and not sent yet: it
+   * lives on Home's composer until its first message is accepted (1.0.12 §一).
+   * A chat with a name typed by the user is never treated as reusable.
+   */
+  draft?: boolean;
+  /**
+   * Where the user was in this conversation (1.0.12 §四): the file it last
+   * showed beside it, and the reading position. Per conversation, so another
+   * chat or Local never lends it theirs.
+   */
+  workspace?: ChatWorkspace;
+}
+
+export interface ChatWorkspace {
+  fileId?: string;
+  /** Pixels from the top of the transcript, when the user had scrolled up. */
+  scrollTop?: number;
+  /** Following the newest message; false keeps `scrollTop`. */
+  followLatest?: boolean;
 }
 
 export interface ProjectMeta {
@@ -101,6 +121,11 @@ export function patchChatMeta(meta: LibraryMeta, id: string, patch: ChatMeta): L
   const next = compact({ ...meta.chats[id], ...patch });
   const { [id]: _previous, ...rest } = meta.chats;
   return { ...meta, chats: next ? { ...rest, [id]: next } : rest };
+}
+
+/** Merges into a conversation's remembered place, keeping what the patch does not name. */
+export function patchChatWorkspace(meta: LibraryMeta, id: string, patch: ChatWorkspace): LibraryMeta {
+  return patchChatMeta(meta, id, { workspace: { ...meta.chats[id]?.workspace, ...patch } });
 }
 
 export function patchProjectMeta(meta: LibraryMeta, id: string, patch: ProjectMeta): LibraryMeta {

@@ -244,7 +244,7 @@ export function useAgentTask() {
     shown?.status === "working" || shown?.status === "reading" || shown?.status === "writing";
 
   const send = useCallback(
-    async (submission: ComposerSubmission & { newConversation?: boolean }) => {
+    async (submission: ComposerSubmission & { newConversation?: boolean; conversationId?: string }) => {
       if (localRun.current && localSnapshot.current?.question?.allowFreeform) {
         localRun.current.answer({ text: submission.text });
         return;
@@ -265,9 +265,10 @@ export function useAgentTask() {
        * An addressed one is named outright. A Local document without one gets
        * its own here, before anything is sent, and the id is recorded against
        * the file so the next open of that document finds the same thread.
-       * Home's composer and New → AI Chat leave the id to the runtime.
+       * Home's own draft leaves the id to the runtime; a project's draft chat
+       * written on Home (1.0.12 §一) names the id it was given at New chat.
        */
-      let addressed: string | undefined = conversationId ?? undefined;
+      let addressed: string | undefined = submission.conversationId ?? conversationId ?? undefined;
       if (kind === "file" && fileId) {
         addressed = newConversationId();
         setChatMeta(addressed, { folderId: scopeFolderId, fileId, createdAt: Date.now() });

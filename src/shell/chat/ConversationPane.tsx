@@ -16,7 +16,11 @@ import { CompactAssets } from "./CompactAssets";
 /** How close to the bottom still counts as "following" (AGENT-STATE-STANDARD §07). */
 const FOLLOW_THRESHOLD = 64;
 
-/** Where each conversation's view was left, so switching back returns to it. */
+/**
+ * Where each conversation's view was left, so switching back returns to it.
+ * This session's copy; the conversation's own record (`ChatMeta.workspace`)
+ * carries it across a relaunch (1.0.12 §四).
+ */
 const scrollMemory = new Map<string, number>();
 
 /**
@@ -37,7 +41,7 @@ const scrollMemory = new Map<string, number>();
  */
 export function ConversationPane() {
   const t = useT();
-  const { state, dispatch, currentChat } = useShell();
+  const { state, dispatch, currentChat, chatMeta, setChatWorkspace } = useShell();
   const agent = useAgent();
   const pane = useRef<HTMLElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -51,23 +55,49 @@ export function ConversationPane() {
   const task = agent.task;
   const title = currentChat?.name ?? state.pendingChatName ?? task?.title ?? t("dx.chat.untitled");
 
+  /*
+   * A reading position from before a relaunch, waiting for the transcript to
+   * be long enough to hold it: the messages arrive after the pane does.
+   */
+  const pendingRestore = useRef<number | null>(null);
+  const conversationId = chat?.conversationId ?? null;
+  const persisted = conversationId ? chatMeta[conversationId]?.workspace : undefined;
+  const persistedRef = useRef(persisted);
+  persistedRef.current = persisted;
+
   // Restore where this conversation was left; remember where the last one was.
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element) return;
-    const saved = scrollMemory.get(key);
+    const remembered = persistedRef.current;
+    const saved =
+      scrollMemory.get(key) ??
+      (state.panel === "chat" && remembered?.followLatest === false ? remembered.scrollTop : undefined);
     element.scrollTop = saved ?? element.scrollHeight;
+    pendingRestore.current = saved !== undefined && element.scrollTop < saved ? saved : null;
     following.current = saved === undefined || element.scrollHeight - saved - element.clientHeight < FOLLOW_THRESHOLD;
     setBehind(false);
+    const panel = state.panel;
     return () => {
       scrollMemory.set(key, element.scrollTop);
+      if (!conversationId || panel !== "chat") return;
+      const followLatest = element.scrollHeight - element.scrollTop - element.clientHeight < FOLLOW_THRESHOLD;
+      setChatWorkspace(conversationId, { scrollTop: Math.round(element.scrollTop), followLatest });
     };
+    // `state.panel` and the conversation are both part of `key`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   // A task update: follow it, or say there is something new below.
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element || state.panel !== "chat") return;
+    const target = pendingRestore.current;
+    if (target !== null) {
+      element.scrollTop = target;
+      if (element.scrollTop >= target - 1) pendingRestore.current = null;
+      return;
+    }
     if (following.current) element.scrollTop = element.scrollHeight;
     else setBehind(true);
   }, [task, state.panel]);
@@ -95,7 +125,7 @@ export function ConversationPane() {
     const width = pane.current?.offsetWidth ?? state.chatWidth;
     const height = pane.current?.offsetHeight ?? 600;
     const start =
-      state.chatPosition === "right" ? window.innerWidth - width - 16 : (state.navCollapsed ? 0 : 244) + 16;
+      state.chatPosition === "right" ? window.innerWidth - width - 16 : (state.navCollapsed ? 0 : state.navWidth) + 16;
     const x = Math.max(8, Math.min(point?.x ?? start, window.innerWidth - width - 8));
     const y = Math.max(48, Math.min(point?.y ?? window.innerHeight - height - 16, window.innerHeight - height - 8));
     return { left: x, top: y, right: "auto", bottom: "auto" } as const;
@@ -166,7 +196,14 @@ export function ConversationPane() {
         </button>
       </div>
 
-      <div className="dx-chat-scroll" ref={scroller} onScroll={onScroll}>
+      <div
+        className="dx-chat-scroll"
+        ref={scroller}
+        onScroll={onScroll}
+        // The reader moved: a position still waiting to be restored is theirs to drop.
+        onWheel={() => (pendingRestore.current = null)}
+        onPointerDown={() => (pendingRestore.current = null)}
+      >
         {state.panel === "assets" ? (
           <CompactAssets />
         ) : task && imageTask ? (

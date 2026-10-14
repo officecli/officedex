@@ -6,7 +6,7 @@ import { openMenu, openModal } from "../kit/layers";
 import { usePort } from "../port/PortContext";
 import { attempt } from "../port/reportPortFailure";
 import { useShell, type Chat, type Project } from "../state/ShellContext";
-import { newConversationId } from "../state/libraryMeta";
+import { useChatEntry } from "./useChatEntry";
 
 /**
  * The project and conversation menus, and the dialogs behind them.
@@ -25,45 +25,37 @@ export function useWorkspaceMenus() {
   const port = usePort();
   const { state, dispatch, chats, projects, defaultFolderId, reload, setChatMeta, setProjectMeta } = useShell();
 
+  const entry = useChatEntry();
+
+  /*
+   * A project needs only its name (1.0.12 §一). Once it exists, Home's composer
+   * is focused with the project chosen — no empty three columns, no Assets.
+   */
   const newProject = useCallback(() => {
     openNameDialog({
       title: t("dx.project.new"),
       label: t("dx.project.nameLabel"),
       action: t("dx.action.create"),
+      form: "new-project",
       onSubmit: async (name) => {
         if (projects.some((project) => project.name === name && !project.archived)) {
           return t("dx.project.nameTaken");
         }
         const folder = await port.folders.create(name);
         await reload();
-        dispatch({ type: "reveal-folder", folderId: folder.id });
+        entry.startChat(folder.id);
       },
     });
-  }, [t, port, projects, reload, dispatch]);
+  }, [t, port, projects, reload, entry]);
 
   /*
-   * Naming a chat creates it. It gets an id here and now and is recorded with
-   * its name and project, so it has a row in the tree before anything is said
-   * in it — and keeps that row across Home, another project and a relaunch.
-   * The first message is sent under the same id. This used to hold the name in
-   * view state until a first run named the conversation, and a chat that was
-   * left before that simply ceased to exist.
+   * A chat is not named up front any more (1.0.12 §一, §四): New chat puts
+   * Home's composer on a draft chat in the project, and the first accepted
+   * message names it. The draft has an id from the start and a row in the
+   * tree, so it survives Home, another project and a relaunch, and its first
+   * message is sent under the same id. Rename stays in the chat's menu.
    */
-  const newChat = useCallback(
-    (folderId: string) => {
-      openNameDialog({
-        title: t("dx.chat.new"),
-        label: t("dx.chat.nameLabel"),
-        action: t("dx.action.create"),
-        onSubmit: (name) => {
-          const conversationId = newConversationId();
-          setChatMeta(conversationId, { name, folderId, createdAt: Date.now() });
-          dispatch({ type: "open-chat", chat: { folderId, conversationId } });
-        },
-      });
-    },
-    [t, setChatMeta, dispatch],
-  );
+  const newChat = useCallback((folderId: string) => entry.startChat(folderId), [entry]);
 
   const leaveChatIfOpen = useCallback(
     (matches: (chat: { folderId: string; conversationId: string | null }) => boolean) => {
@@ -84,7 +76,11 @@ export function useWorkspaceMenus() {
               label: t("dx.project.nameLabel"),
               initial: project.name,
               action: t("dx.menu.rename"),
+              form: "rename-project",
               onSubmit: async (name) => {
+                if (projects.some((other) => other.id !== project.id && other.name === name && !other.archived)) {
+                  return t("dx.project.nameTaken");
+                }
                 await port.folders.rename(project.id, name);
                 await reload();
               },
@@ -115,7 +111,7 @@ export function useWorkspaceMenus() {
         },
       ]);
     },
-    [t, port, reload, newChat, setProjectMeta, leaveChatIfOpen, dispatch],
+    [t, port, projects, reload, newChat, setProjectMeta, leaveChatIfOpen, dispatch],
   );
 
   const chatMenu = useCallback(

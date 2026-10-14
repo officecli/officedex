@@ -29,6 +29,7 @@ import { Icon } from "./kit/Icon";
 import { Layers, closeMenu } from "./kit/layers";
 import { mountTooltips } from "./kit/tooltips";
 import { AssetsPage } from "./pages/AssetsPage";
+import { ChatEmpty } from "./pages/ChatEmpty";
 import { FeatureHighlights } from "./pages/FeatureHighlights";
 import { Home, useCreateOfType } from "./pages/Home";
 import { ImageCreatePage } from "./pages/ImageCreatePage";
@@ -216,6 +217,8 @@ function Workspace() {
   const running = isRunning(runStateOf(agent.task));
 
   const onEditor = state.page === "editor";
+  // A conversation resumed with no file it can show (1.0.12 §四).
+  const chatEmpty = onEditor && state.chat !== null && state.activeFileId === null && !state.stage && !state.demo;
   /*
    * The switch appears once there is work beside the conversation — a message
    * sent, a run, a file opened — and then stays in the window's top-right
@@ -285,6 +288,7 @@ function Workspace() {
           {state.page === "assets" ? <AssetsPage /> : null}
           {state.page === "image" ? <ImageCreatePage /> : null}
           {state.page === "settings" ? <SettingsPage onOpenAccount={() => setAccountOpen(true)} /> : null}
+          {chatEmpty ? <ChatEmpty /> : null}
 
           {/* Hidden rather than unmounted: see the note at the top of this file. */}
           <section
@@ -293,11 +297,11 @@ function Workspace() {
             data-file-editor={activeFile?.id ?? ""}
             data-editor-mode={state.chat ? "agent" : "editor"}
             data-editor-kind={editorKind}
-            hidden={!onEditor}
+            hidden={!onEditor || chatEmpty}
           >
             <EditorCanvasHost
               file={activeFile}
-              visible={onEditor}
+              visible={onEditor && !chatEmpty}
               adapter={canvas}
               // A document beside a conversation gets Writer's single-line
               // toolbar; one opened from Local keeps the full ribbon. The tab

@@ -102,6 +102,16 @@ const OFFICIAL_MODEL_NAME = "OfficeDex";
 const drafts = new Map<string, Draft>();
 
 /**
+ * Whether a placement's kept draft for `draftKey` holds anything the user put
+ * there — text, a reference, an attachment, an output choice. Empty drafts are
+ * not kept, so presence is the answer. New chat reuses an untouched draft chat
+ * and must never take over one the user has started writing (1.0.12 §一).
+ */
+export function hasComposerDraft(placement: ComposerPlacement, draftKey: string): boolean {
+  return drafts.has(`${placement}:${draftKey}`);
+}
+
+/**
  * Forgets every kept draft.
  *
  * Exists for tests. The map is module state, so one test's half-written message

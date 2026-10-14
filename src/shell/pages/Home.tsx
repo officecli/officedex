@@ -3,14 +3,17 @@ import { useMemo, type KeyboardEvent } from "react";
 import { useT } from "../../renderer/i18n";
 import { useAgent } from "../agent/AgentContext";
 import { useCanvas } from "../canvas/CanvasContext";
+import { useChatEntry } from "../chrome/useChatEntry";
 import { statusKeyOf, useFileActions } from "../chrome/useFileActions";
+import { useWorkspaceMenus } from "../chrome/useWorkspaceMenus";
 import { Composer } from "../composer/Composer";
 import { formatDateTime } from "../kit/format";
 import { FileIcon, Icon, extensionOf } from "../kit/Icon";
+import { openMenu } from "../kit/layers";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
 import type { FileMeta } from "../../shared/uiPort";
-import { useShell } from "../state/ShellContext";
+import { useShell, type Project } from "../state/ShellContext";
 import { FeatureHighlights } from "./FeatureHighlights";
 import { PptxTemplatesButton } from "./PptxTemplates";
 import { CREATABLE, NEW_GROUPS, recentFiles, type NewType } from "./fileRows";
@@ -27,27 +30,51 @@ const RECENT_LIMIT = 8;
  * One heading, one input, then three ways in: Quick start (straight to a Local
  * editor, no conversation), Hot and fresh features, and Recent. There is no
  * subtitle. The template library opens a separate generation flow.
+ *
+ * Above the input there is only the project picker (1.0.12 UI-07): no "This
+ * Mac", no input-settings button. Home's input is where every new chat begins
+ * (§一) — a project's New chat and a new project land here with the project
+ * chosen, and the conversation workspace opens only when a message is sent.
  */
 export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }) {
   const t = useT();
-  const { state, dispatch, files, defaultFolderId } = useShell();
+  const { state, dispatch, files, projects, defaultFolderId, setChatMeta } = useShell();
   const agent = useAgent();
   const canvas = useCanvas();
   const recent = useMemo(() => recentFiles(files, RECENT_LIMIT), [files]);
+  const homeChat = state.homeChat;
+  const project = homeChat ? (projects.find((entry) => entry.id === homeChat.folderId && !entry.archived) ?? null) : null;
+  // A draft chat whose project went away falls back to Home's own draft.
+  const bound = homeChat && project && homeChat.conversationId ? homeChat : null;
 
   return (
     <div className="dx-page-scroll" data-ui-scope="officedex">
       <section className="dx-home">
         <h1>{t("dx.home.title")}</h1>
         <div className="dx-home-composer">
+          <HomeProjectPicker project={project} />
           <Composer
+            // One composer per draft chat: its words and references come back
+            // with it, and never show up in another chat's draft.
+            key={bound?.conversationId ?? ""}
             placement="home"
+            draftKey={bound?.conversationId ?? ""}
             busy={false}
             onSend={async (submission) => {
-              // Home starts new work: a conversation of its own, in no project.
-              dispatch({ type: "open-chat", chat: { folderId: defaultFolderId, conversationId: null } });
               // With an editor to draw on, the run's stage is what the content
               // region shows; without one the project's Assets stay.
+              if (bound?.conversationId) {
+                // The project's draft chat becomes a conversation under the id
+                // it has had since New chat; its first message names it.
+                const conversationId = bound.conversationId;
+                setChatMeta(conversationId, { draft: false });
+                dispatch({ type: "open-chat", chat: bound });
+                if (canvas) dispatch({ type: "enter-stage" });
+                await agent.send({ ...submission, folderId: bound.folderId, conversationId });
+                return;
+              }
+              // Home's own draft: a conversation of its own, in no project.
+              dispatch({ type: "open-chat", chat: { folderId: defaultFolderId, conversationId: null } });
               if (canvas) dispatch({ type: "enter-stage" });
               await agent.send({ ...submission, folderId: defaultFolderId, newConversation: true });
             }}
@@ -74,6 +101,56 @@ export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }
           <HomeRecent files={recent} />
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Which project a new chat goes into — the one control above Home's input.
+ *
+ * Choosing a project picks up that project's unsent draft, if it has one,
+ * rather than carrying the current message across; "No project" is Home's own
+ * draft. New project creates one and comes back here with it chosen.
+ */
+function HomeProjectPicker({ project }: { project: Project | null }) {
+  const t = useT();
+  const { projects } = useShell();
+  const entry = useChatEntry();
+  const menus = useWorkspaceMenus();
+  const label = project?.name ?? t("dx.home.chooseProject");
+  return (
+    <div className="dx-home-context-bar" role="group" aria-label={t("dx.home.chatContext")}>
+      <button
+        type="button"
+        className="dx-btn dx-home-project-picker"
+        data-act="home-project-picker"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-label={t("dx.home.chooseProjectAria", { name: project?.name ?? t("dx.home.noProject") })}
+        title={label}
+        onClick={(event) =>
+          openMenu(
+            event.currentTarget,
+            [
+              { label: t("dx.home.noProject"), checked: project === null, onSelect: () => entry.resumeProjectDraft(null) },
+              ...projects
+                .filter((entry) => !entry.archived)
+                .map((option) => ({
+                  label: option.name,
+                  checked: option.id === project?.id,
+                  onSelect: () => entry.resumeProjectDraft(option.id),
+                })),
+              "-",
+              { label: t("dx.project.new"), onSelect: menus.newProject },
+            ],
+            { className: "dx-home-context-menu", label: t("dx.home.chooseProject") },
+          )
+        }
+      >
+        <Icon name="Folder" size={18} />
+        <span className="dx-ellipsis">{label}</span>
+        <Icon name="ChevronDown" size={12} />
+      </button>
     </div>
   );
 }

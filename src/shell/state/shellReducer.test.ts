@@ -575,3 +575,36 @@ describe("resizing the sidebar", () => {
     expect(hydrateShellState({ ...old, navWidth: Number.NaN }).navWidth).toBe(NAV_WIDTH);
   });
 });
+
+// 1.0.12 §一: unstarted chats live on Home; started ones resume.
+describe("Home's draft chat and resuming a chat", () => {
+  const DRAFT: ChatRef = { folderId: "launch", conversationId: "conv-draft" };
+
+  it("puts Home's composer on a project's draft chat without opening the conversation", () => {
+    const state = run(initialShellState, { type: "open-chat", chat: PLAN }, { type: "open-home-draft", chat: DRAFT });
+    expect(state).toMatchObject({ page: "home", chat: null, homeChat: DRAFT, workspaceOpen: false });
+    expect(state.expandedFolderIds).toContain("launch");
+  });
+
+  it("drops the project for the Logo tab, Local and any opened conversation", () => {
+    const drafted = run(initialShellState, { type: "open-home-draft", chat: DRAFT });
+    expect(run(drafted, { type: "go", page: "home" }).homeChat).toBeNull();
+    expect(run(drafted, { type: "go", page: "local" }).homeChat).toBeNull();
+    expect(run(drafted, { type: "open-chat", chat: DRAFT }).homeChat).toBeNull();
+    expect(run(drafted, { type: "open-home-draft", chat: null }).homeChat).toBeNull();
+  });
+
+  it("resumes a chat beside the file it last showed, in that chat's context", () => {
+    const state = run(initialShellState, { type: "resume-chat", chat: SALES, fileId: "sheet" });
+    expect(state).toMatchObject({ page: "editor", chat: SALES, activeFileId: "sheet", workspaceOpen: true });
+    expect(state.tabContexts.sheet).toEqual(SALES);
+  });
+
+  it("resumes a chat with nothing to show to an empty editor region, not Assets", () => {
+    const state = run(initialShellState, { type: "resume-chat", chat: SALES, fileId: null });
+    expect(state).toMatchObject({ page: "editor", chat: SALES, activeFileId: null, stage: false });
+    expect(showsEditor(state)).toBe(false);
+    // And a relaunch into it keeps the conversation rather than falling to Home.
+    expect(hydrateShellState(toPersisted(state)).page).toBe("editor");
+  });
+});

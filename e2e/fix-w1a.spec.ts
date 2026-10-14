@@ -469,11 +469,13 @@ test.describe("W1-A overlay engine", () => {
     await expect(row.locator("[data-act=project-menu]")).toHaveAttribute("aria-expanded", "false");
 
     // And a click on an item still reaches its handler through the portal:
-    // New chat opens the name dialog.
+    // New chat goes to Home's input with the project chosen (1.0.12 §一) —
+    // no name dialog any more.
     await openRowMenu(row, "[data-act=project-menu]");
     await page.locator(MENU).waitFor();
     await page.getByRole("menuitem", { name: "New Chat" }).click();
-    await expect(page.locator("dialog#dx-modal")).toBeVisible();
-    await expect(page.locator("#dx-modal-title")).toHaveText("New Chat");
+    await expect(page.locator("dialog#dx-modal")).toHaveCount(0);
+    await expect(page.locator(".dx-home-context-bar [data-act=home-project-picker]")).toBeVisible();
+    await expect(page.locator(".dx-home-composer textarea[data-draft]")).toBeFocused();
   });
 });

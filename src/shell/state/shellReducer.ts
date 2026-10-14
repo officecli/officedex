@@ -20,6 +20,11 @@
  *    (§16, WORKSPACE-STANDARD §01).
  *  - **The sidebar only moves when the user moves it.** No navigation action
  *    touches `navCollapsed` (§16, "首栏默认常驻").
+ *  - **A chat nobody has spoken in lives on Home** (1.0.12 §一). Starting one
+ *    — from a project, from New project, from the project picker — puts Home's
+ *    composer on it (`homeChat`); only a sent message opens the conversation
+ *    workspace. Opening a chat that has history goes straight back to it and
+ *    to the file it last showed (`resume-chat`), never to Assets by default.
  */
 
 import type { FileMeta } from "../../shared/uiPort";
@@ -105,6 +110,12 @@ export interface ShellState {
    * the conversation's name when its first run gives it an id.
    */
   pendingChatName: string | null;
+  /**
+   * The not-yet-started chat Home's composer is writing into (1.0.12 §一):
+   * its project and the id the shell minted for it. Null is Home's own new
+   * chat, in no project. The draft text and references are kept per chat.
+   */
+  homeChat: ChatRef | null;
   /** What the second column shows: the conversation, or the compact Assets list. */
   panel: ChatPanel;
   /** Whether the content region is showing beside an open conversation. */
@@ -157,6 +168,18 @@ export type ShellAction =
   /** Home, Local, Settings or the image creator: leaves any conversation. */
   | { type: "go"; page: "home" | "local" | "projects" | "settings" | "image"; section?: SettingsSectionId }
   | { type: "open-chat"; chat: ChatRef; name?: string }
+  /**
+   * Home, writing into a chat that has not been started (1.0.12 §一): the
+   * project's New chat, a new project, a draft chat's row, the project picker.
+   * Null is Home's own unfiled draft.
+   */
+  | { type: "open-home-draft"; chat: ChatRef | null }
+  /**
+   * Back to a chat that has history: its messages beside the file it last
+   * showed (`fileId`), or an empty editor region when it has none it can show
+   * — not Assets, and nothing is re-run (1.0.12 §一, §四).
+   */
+  | { type: "resume-chat"; chat: ChatRef; fileId: string | null }
   /** A chat that had no conversation id has just been given one by its first run. */
   | { type: "adopt-conversation"; folderId: string; conversationId: string }
   | { type: "set-panel"; panel: ChatPanel }
@@ -217,6 +240,7 @@ export const initialShellState: ShellState = {
   page: "home",
   chat: null,
   pendingChatName: null,
+  homeChat: null,
   panel: "chat",
   workspaceOpen: false,
   chatFloating: false,
@@ -299,6 +323,8 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
       return {
         ...next,
         page: action.page,
+        // The Logo tab, Local, Settings: Home is its own unfiled draft again.
+        homeChat: null,
         activeFileId: null,
         stage: false,
         demo: false,
@@ -309,9 +335,29 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
       };
     }
 
+    case "open-home-draft": {
+      const home = shellReducer(state, { type: "go", page: "home" });
+      if (!action.chat) return home;
+      const folderId = action.chat.folderId;
+      return {
+        ...home,
+        homeChat: action.chat,
+        expandedFolderIds: home.expandedFolderIds.includes(folderId)
+          ? home.expandedFolderIds
+          : [...home.expandedFolderIds, folderId],
+      };
+    }
+
+    case "resume-chat": {
+      const opened = shellReducer(state, { type: "open-chat", chat: action.chat });
+      if (action.fileId === null) return { ...opened, page: "editor" };
+      return shellReducer(opened, { type: "open-file", fileId: action.fileId });
+    }
+
     case "open-chat":
       return {
         ...state,
+        homeChat: null,
         chat: action.chat,
         pendingChatName: action.chat.conversationId === null ? (action.name?.trim() || null) : null,
         page: "assets",
@@ -621,8 +667,9 @@ export function hydrateShellState(persisted: Partial<PersistedShellState>): Shel
   return {
     ...initialShellState,
     // A page that needs something the session did not bring back falls to Home.
+    // A conversation's empty editor region is a page of its own (`resume-chat`).
     page:
-      (page === "assets" && !chat) || (page === "editor" && !activeFileId && !demo && !stage) ? "home" : page,
+      (page === "assets" && !chat) || (page === "editor" && !activeFileId && !demo && !stage && !chat) ? "home" : page,
     chat,
     panel: persisted.panel === "assets" && chat ? "assets" : "chat",
     workspaceOpen: chat ? persisted.workspaceOpen !== false : false,

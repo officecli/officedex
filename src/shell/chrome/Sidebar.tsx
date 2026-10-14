@@ -3,10 +3,9 @@ import { useCallback, type KeyboardEvent, type ReactNode } from "react";
 import { useT } from "../../renderer/i18n";
 import type { Account } from "../account/useAccount";
 import { Icon } from "../kit/Icon";
-import { usePort } from "../port/PortContext";
-import { attempt } from "../port/reportPortFailure";
 import { useShell, type Chat, type Project } from "../state/ShellContext";
 import { sameChat, type AvatarId, type ChatRef } from "../state/shellReducer";
+import { useChatEntry } from "./useChatEntry";
 import { useWorkspaceMenus } from "./useWorkspaceMenus";
 
 import giftIcon from "../assets/ui/ic_fluent_gift_open_20_regular.svg";
@@ -65,19 +64,12 @@ export function Sidebar({
   children?: ReactNode;
 }) {
   const t = useT();
-  const port = usePort();
   const { state, dispatch, projects, chats, defaultFolderId } = useShell();
   const menus = useWorkspaceMenus();
 
-  const openChat = useCallback(
-    async (chat: Chat) => {
-      // The port shows one conversation per folder; say which before showing it.
-      if (await attempt(async () => void (await port.agent.openConversation(chat.folderId, chat.id)))) {
-        dispatch({ type: "open-chat", chat: { folderId: chat.folderId, conversationId: chat.id } });
-      }
-    },
-    [port, dispatch],
-  );
+  const entry = useChatEntry();
+  // 1.0.12 §一: an unstarted chat goes back to Home; one with history resumes.
+  const openChat = useCallback((chat: Chat) => entry.openChat(chat), [entry]);
 
   const visibleProjects = projects.filter((project) => !project.archived);
   const projectIds = new Set(visibleProjects.map((project) => project.id));
@@ -116,7 +108,9 @@ export function Sidebar({
   };
 
   const chatRow = (chat: Chat) => {
-    const selected = sameChat(state.chat, { folderId: chat.folderId, conversationId: chat.id });
+    const ref = { folderId: chat.folderId, conversationId: chat.id };
+    // A draft chat being written on Home is the one in hand (1.0.12 §一).
+    const selected = sameChat(state.chat, ref) || (state.page === "home" && sameChat(state.homeChat, ref));
     return (
       <div key={chat.id} className={selected ? "dx-chat-tree dx-selected" : "dx-chat-tree"} role="treeitem" aria-selected={selected}>
         <button type="button" data-act="open-chat" data-id={chat.id} title={chat.name} onClick={() => void openChat(chat)}>

@@ -19,13 +19,19 @@ interface NameDialogOptions {
   action: string;
   helper?: ReactNode;
   /**
+   * `data-form` on the form, for the few dialogs the design styles by name —
+   * the project name field is a filled field with no border or focus ring
+   * (1.0.12 UI-08), and only for "new-project" and "rename-project".
+   */
+  form?: string;
+  /**
    * Resolve to finish; throw (or return a string) to keep the dialog open with
    * that message under the field.
    */
   onSubmit: (name: string) => Promise<string | void> | string | void;
 }
 
-function NameForm({ label, initial = "", action, helper, onSubmit }: Omit<NameDialogOptions, "title">) {
+function NameForm({ label, initial = "", action, helper, form, onSubmit }: Omit<NameDialogOptions, "title">) {
   const t = useT();
   const [value, setValue] = useState(initial);
   const [error, setError] = useState("");
@@ -55,7 +61,7 @@ function NameForm({ label, initial = "", action, helper, onSubmit }: Omit<NameDi
   };
 
   return (
-    <form onSubmit={(event) => void submit(event)}>
+    <form data-form={form} onSubmit={(event) => void submit(event)}>
       <label className="dx-form-field">
         <span>{label}</span>
         <input

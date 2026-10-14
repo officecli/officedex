@@ -18,11 +18,13 @@ import { bootPersisted, writePersisted, type PersistedShellState } from "./persi
 import {
   conversationForFile,
   patchChatMeta,
+  patchChatWorkspace,
   patchProjectMeta,
   readLibraryMeta,
   shellConversations,
   writeLibraryMeta,
   type ChatMeta,
+  type ChatWorkspace,
   type LibraryMeta,
   type ProjectMeta,
 } from "./libraryMeta";
@@ -51,6 +53,14 @@ export interface Chat {
   archived: boolean;
   /** A run in this conversation is under way. */
   running: boolean;
+  /**
+   * The port has a run for it: a message was accepted, so it has history,
+   * a task, a question waiting or a result. False for a chat that only exists
+   * in the shell's overlay — one nobody has spoken in yet (1.0.12 §一).
+   */
+  started: boolean;
+  /** Started from New chat and still unsent; see `ChatMeta.draft`. */
+  draft: boolean;
   summary: AgentTaskSummary;
 }
 
@@ -103,6 +113,8 @@ interface ShellContextValue {
   reload: () => Promise<void>;
   reloadChats: () => Promise<void>;
   setChatMeta: (id: string, patch: ChatMeta) => void;
+  /** Merges into a conversation's remembered place (file, reading position). */
+  setChatWorkspace: (id: string, patch: ChatWorkspace) => void;
   setProjectMeta: (id: string, patch: ProjectMeta) => void;
 }
 
@@ -274,8 +286,34 @@ export function ShellProvider({
     if (persist) writeLibraryMeta(meta);
   }, [meta, persist]);
 
+  /*
+   * The file a conversation last showed beside it (1.0.12 §四) — recorded
+   * whenever a file opened in that conversation's context is on screen, so
+   * coming back to the chat brings it back. A Local tab, or a tab another
+   * conversation opened, is never written to this one.
+   */
+  const shownConversationId = state.chat?.conversationId ?? null;
+  const shownFileId =
+    state.page === "editor" &&
+    state.activeFileId &&
+    shownConversationId &&
+    sameChat(state.tabContexts[state.activeFileId] ?? null, state.chat)
+      ? state.activeFileId
+      : null;
+  useEffect(() => {
+    if (!shownConversationId || !shownFileId) return;
+    setMeta((current) =>
+      current.chats[shownConversationId]?.workspace?.fileId === shownFileId
+        ? current
+        : patchChatWorkspace(current, shownConversationId, { fileId: shownFileId }),
+    );
+  }, [shownConversationId, shownFileId]);
+
   const setChatMeta = useCallback((id: string, patch: ChatMeta) => {
     setMeta((current) => patchChatMeta(current, id, patch));
+  }, []);
+  const setChatWorkspace = useCallback((id: string, patch: ChatWorkspace) => {
+    setMeta((current) => patchChatWorkspace(current, id, patch));
   }, []);
   const setProjectMeta = useCallback((id: string, patch: ProjectMeta) => {
     setMeta((current) => patchProjectMeta(current, id, patch));
@@ -310,6 +348,8 @@ export function ShellProvider({
         pinned: own?.pinned === true,
         archived: own?.archived === true,
         running: RUNNING.has(summary.status),
+        started: true,
+        draft: false,
         summary,
       };
     });
@@ -331,6 +371,8 @@ export function ShellProvider({
           pinned: entry.meta.pinned === true,
           archived: entry.meta.archived === true,
           running: false,
+          started: false,
+          draft: entry.meta.draft === true,
           summary: {
             id: entry.id,
             conversationId: entry.id,
@@ -393,6 +435,7 @@ export function ShellProvider({
       reload,
       reloadChats,
       setChatMeta,
+      setChatWorkspace,
       setProjectMeta,
     }),
     [
@@ -411,6 +454,7 @@ export function ShellProvider({
       reload,
       reloadChats,
       setChatMeta,
+      setChatWorkspace,
       setProjectMeta,
     ],
   );

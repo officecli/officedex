@@ -1,10 +1,9 @@
 import { useState } from "react";
 
 import { useT } from "../../renderer/i18n";
+import { useChatEntry } from "../chrome/useChatEntry";
 import { useWorkspaceMenus } from "../chrome/useWorkspaceMenus";
 import { Icon } from "../kit/Icon";
-import { usePort } from "../port/PortContext";
-import { attempt } from "../port/reportPortFailure";
 import { useShell, type Chat } from "../state/ShellContext";
 
 /**
@@ -16,9 +15,9 @@ import { useShell, type Chat } from "../state/ShellContext";
  */
 export function ProjectsPage() {
   const t = useT();
-  const port = usePort();
-  const { dispatch, projects, chats, defaultFolderId, setChatMeta, setProjectMeta } = useShell();
+  const { projects, chats, defaultFolderId, setChatMeta, setProjectMeta } = useShell();
   const menus = useWorkspaceMenus();
+  const entry = useChatEntry();
   const [archived, setArchived] = useState(false);
 
   const shown = projects.filter((project) => project.archived === archived);
@@ -27,11 +26,8 @@ export function ProjectsPage() {
     (chat) => chat.archived && (chat.folderId === defaultFolderId || liveProjectIds.has(chat.folderId)),
   );
 
-  const open = async (chat: Chat) => {
-    if (await attempt(async () => void (await port.agent.openConversation(chat.folderId, chat.id)))) {
-      dispatch({ type: "open-chat", chat: { folderId: chat.folderId, conversationId: chat.id } });
-    }
-  };
+  // 1.0.12 §一: an unstarted chat goes to Home; one with history resumes.
+  const open = (chat: Chat) => void entry.openChat(chat);
 
   return (
     <section className="dx-page-scroll" data-ui-scope="officedex">

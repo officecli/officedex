@@ -18,7 +18,7 @@ import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { resetLayers } from "../kit/layers";
-import { PROTOTYPE_FOLDER_IDS, prototypeFiles, prototypeFolders, prototypeTasks } from "../port/fake/prototypeSeed";
+import { PROTOTYPE_CHAT_IDS, PROTOTYPE_FOLDER_IDS, prototypeFiles, prototypeFolders, prototypeTasks } from "../port/fake/prototypeSeed";
 import { renderShell, type RenderShellOptions } from "../test/renderShell";
 
 afterEach(() => {
@@ -138,97 +138,143 @@ describe("a Local document owns its conversation", () => {
   });
 });
 
-describe("a named chat exists before it is spoken in", () => {
+/**
+ * 1.0.12 §一: a chat is not named up front. A project's New chat puts Home's
+ * composer on a draft chat in that project; the chat has an id and a row from
+ * that moment, but only a sent message opens the conversation workspace.
+ */
+describe("a project's New chat starts on Home", () => {
   const launch = PROTOTYPE_FOLDER_IDS.launch;
 
-  /** Project ⋯ → New chat, named. */
-  async function nameChat(view: Shell, name: string) {
+  /** Project ⋯ → New Chat. No dialog: Home, with the project chosen. */
+  async function startChat(view: Shell) {
     fireEvent.click(view.find(`#dx-sidebar [data-act=project-menu][data-id=${launch}]`)!);
     const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "New Chat")!;
-    fireEvent.click(item);
-    const dialog = document.querySelector<HTMLDialogElement>("dialog#dx-modal")!;
-    fireEvent.change(dialog.querySelector("input[name=name]")!, { target: { value: name } });
     await act(async () => {
-      fireEvent.submit(dialog.querySelector("form")!);
+      fireEvent.click(item);
     });
+    expect(document.querySelector("dialog#dx-modal[open]")).toBeNull();
     await waitFor(() => {
-      if (!view.state().chat?.conversationId) throw new Error("the chat has no id");
+      if (!view.state().homeChat?.conversationId) throw new Error("Home has no draft chat");
     });
-    return view.state().chat!.conversationId!;
+    return view.state().homeChat!.conversationId!;
   }
 
   const row = (view: Shell, id: string) =>
     view.find(`#dx-sidebar [data-act=open-chat][data-id="${id}"]`)?.closest(".dx-chat-tree") ?? null;
+  const homeInput = (view: Shell) => view.find<HTMLTextAreaElement>(".dx-home-composer textarea[data-draft]")!;
+  const picker = (view: Shell) => view.find(".dx-home-context-bar [data-act=home-project-picker]")!;
 
-  it("has an id and a row the moment it is named", async () => {
+  it("has an id and a row at once, and lives on Home until it is sent", async () => {
     const view = await shell();
-    const id = await nameChat(view, "Pricing questions");
+    const id = await startChat(view);
 
     expect(id).toMatch(/^conv-/);
-    expect(view.state().chat).toEqual({ folderId: launch, conversationId: id });
-    expect(row(view, id)?.textContent).toContain("Pricing questions");
+    expect(view.state()).toMatchObject({ page: "home", chat: null, homeChat: { folderId: launch, conversationId: id } });
+    expect(view.find("#dx-conversation .dx-pane-top")).toBeNull();
+    expect(picker(view).textContent).toContain("MO product launch");
+    expect(row(view, id)?.textContent).toContain("New chat");
     expect(row(view, id)?.getAttribute("aria-selected")).toBe("true");
-    // A real row: it can be managed like any other conversation.
     expect(row(view, id)?.querySelector("[data-act=chat-menu]")).not.toBeNull();
-    expect(view.find("#dx-conversation .dx-conversation-title")?.textContent).toBe("Pricing questions");
   });
 
-  it("is still there after Home and after another project", async () => {
+  it("reuses an untouched draft, and never one that has words in it", async () => {
     const view = await shell();
-    const id = await nameChat(view, "Pricing questions");
+    const first = await startChat(view);
+    expect(await startChat(view)).toBe(first);
+
+    fireEvent.change(homeInput(view), { target: { value: "Pricing questions for the launch" } });
+    const second = await startChat(view);
+    expect(second).not.toBe(first);
+    // The one with words is still there, with its words.
+    await act(async () => {
+      fireEvent.click(view.find(`#dx-sidebar [data-act=open-chat][data-id="${first}"]`)!);
+    });
+    expect(view.state().homeChat?.conversationId).toBe(first);
+    expect(homeInput(view).value).toBe("Pricing questions for the launch");
+  });
+
+  it("comes back with its project and words after Local", async () => {
+    const view = await shell();
+    const id = await startChat(view);
+    fireEvent.change(homeInput(view), { target: { value: "Draft the FAQ" } });
+
+    await view.dispatch({ type: "go", page: "local" });
+    await act(async () => {
+      fireEvent.click(view.find(`#dx-sidebar [data-act=open-chat][data-id="${id}"]`)!);
+    });
+    expect(view.state()).toMatchObject({ page: "home", homeChat: { folderId: launch, conversationId: id } });
+    expect(homeInput(view).value).toBe("Draft the FAQ");
+    expect(picker(view).textContent).toContain("MO product launch");
+  });
+
+  it("is not inherited by the global New chat", async () => {
+    const view = await shell();
+    const id = await startChat(view);
+    fireEvent.change(homeInput(view), { target: { value: "Only for the launch" } });
 
     await view.dispatch({ type: "go", page: "home" });
-    expect(view.state().chat).toBeNull();
-    expect(row(view, id)?.textContent).toContain("Pricing questions");
-
-    // Another project, created and looked at, then back.
-    fireEvent.click(view.find("#dx-sidebar [data-act=new-project]")!);
-    const dialog = document.querySelector<HTMLDialogElement>("dialog#dx-modal")!;
-    fireEvent.change(dialog.querySelector("input[name=name]")!, { target: { value: "Other work" } });
-    await act(async () => {
-      fireEvent.submit(dialog.querySelector("form")!);
-    });
-    await waitFor(() => {
-      if (!view.find("#dx-sidebar [aria-label='Other work']")) throw new Error("the new project is not in the tree");
-    });
-    expect(row(view, id)?.textContent).toContain("Pricing questions");
-
-    await view.dispatch({ type: "open-chat", chat: { folderId: launch, conversationId: id } });
-    expect(row(view, id)?.getAttribute("aria-selected")).toBe("true");
-    expect(view.find("#dx-conversation .dx-conversation-title")?.textContent).toBe("Pricing questions");
+    expect(view.state().homeChat).toBeNull();
+    expect(picker(view).textContent).toContain("Choose project");
+    expect(homeInput(view).value).toBe("");
+    expect(row(view, id)).not.toBeNull();
   });
 
   it("survives a relaunch", async () => {
     const first = await shell();
-    const id = await nameChat(first, "Pricing questions");
+    const id = await startChat(first);
     cleanup();
 
     const second = await shell({ keepStorage: true });
-    expect(row(second, id)?.textContent).toContain("Pricing questions");
+    expect(row(second, id)?.textContent).toContain("New chat");
   });
 
-  it("sends its first message under its own id", async () => {
+  it("sends its first message under its own id, and the message names it", async () => {
     const view = await shell();
-    const id = await nameChat(view, "Pricing questions");
+    const id = await startChat(view);
 
-    await view.send(view.find("#dx-conversation")!, "What should the launch price be?");
+    await view.send(view.find(".dx-home-composer")!, "What should the launch price be?");
     await waitFor(() => {
       if (!view.find("#dx-conversation .dx-agent-run")) throw new Error("the run has not reached the conversation");
     });
 
+    expect(view.state().chat).toEqual({ folderId: launch, conversationId: id });
+    expect(view.state().homeChat).toBeNull();
     const rows = await view.port.agent.list();
     const own = rows.find((entry) => entry.conversationId === id);
-    expect(own).toBeDefined();
     expect(own?.folderId).toBe(launch);
-    // One row, still under its name — not a second conversation beside an empty one.
+    // One row, named from what was asked — not a second conversation beside an empty one.
+    await waitFor(() => expect(row(view, id)?.textContent).toContain("What should the launch price be?"));
     expect(view.all(`#dx-sidebar [data-act=open-chat][data-id="${id}"]`)).toHaveLength(1);
-    expect(row(view, id)?.textContent).toContain("Pricing questions");
-    expect(view.state().chat).toEqual({ folderId: launch, conversationId: id });
+  });
+
+  it("keeps a name given with Rename", async () => {
+    const view = await shell();
+    const id = await startChat(view);
+    fireEvent.click(row(view, id)!.querySelector("[data-act=chat-menu]")!);
+    fireEvent.click([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Rename")!);
+    const dialog = document.querySelector<HTMLDialogElement>("dialog#dx-modal")!;
+    fireEvent.change(dialog.querySelector("input[name=name]")!, { target: { value: "Pricing" } });
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+    // A named draft is the user's: New chat makes another rather than reuse it.
+    expect(await startChat(view)).not.toBe(id);
+
+    await act(async () => {
+      fireEvent.click(view.find(`#dx-sidebar [data-act=open-chat][data-id="${id}"]`)!);
+    });
+    await view.send(view.find(".dx-home-composer")!, "What should the launch price be?");
+    await waitFor(() => {
+      if (!view.find("#dx-conversation .dx-agent-run")) throw new Error("the run has not reached the conversation");
+    });
+    expect(row(view, id)?.textContent).toContain("Pricing");
+    expect(row(view, id)?.textContent).not.toContain("launch price");
   });
 
   it("can be archived from its menu like any other conversation", async () => {
     const view = await shell();
-    const id = await nameChat(view, "Pricing questions");
+    const id = await startChat(view);
 
     fireEvent.click(row(view, id)!.querySelector("[data-act=chat-menu]")!);
     const archive = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Archive")!;
@@ -236,6 +282,67 @@ describe("a named chat exists before it is spoken in", () => {
       fireEvent.click(archive);
     });
     expect(row(view, id)).toBeNull();
-    expect(view.state().chat).toBeNull();
+  });
+
+  it("is where a new project lands, with the project chosen", async () => {
+    const view = await shell();
+    fireEvent.click(view.find("#dx-sidebar [data-act=new-project]")!);
+    const dialog = document.querySelector<HTMLDialogElement>("dialog#dx-modal")!;
+    expect(dialog.querySelector("form")?.dataset.form).toBe("new-project");
+    fireEvent.change(dialog.querySelector("input[name=name]")!, { target: { value: "Other work" } });
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector("form")!);
+    });
+    await waitFor(() => {
+      if (!view.state().homeChat) throw new Error("Home has no draft for the new project");
+    });
+    expect(view.state()).toMatchObject({ page: "home", chat: null });
+    expect(picker(view).textContent).toContain("Other work");
+  });
+});
+
+/**
+ * 1.0.12 §一, §四: a chat with history opens beside the file it last showed —
+ * not Assets — and never borrows another chat's or Local's file.
+ */
+describe("opening a chat that has history", () => {
+  const openRow = async (view: Shell, id: string) => {
+    await view.dispatch({ type: "reveal-folder", folderId: PROTOTYPE_FOLDER_IDS.launch });
+    await act(async () => {
+      fireEvent.click(view.find(`#dx-sidebar [data-act=open-chat][data-id="${id}"]`)!);
+    });
+  };
+
+  it("comes back to the file it last showed", async () => {
+    const view = await shell();
+    await openRow(view, PROTOTYPE_CHAT_IDS.sales);
+    await view.dispatch({ type: "open-file", fileId: "budget" });
+    await view.dispatch({ type: "go", page: "local" });
+
+    await openRow(view, PROTOTYPE_CHAT_IDS.sales);
+    expect(view.state()).toMatchObject({ page: "editor", activeFileId: "budget" });
+    expect(view.state().chat).toEqual({ folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: PROTOTYPE_CHAT_IDS.sales });
+  });
+
+  it("opens its own result the first time, not Assets", async () => {
+    const view = await shell();
+    await openRow(view, PROTOTYPE_CHAT_IDS.plan);
+    expect(view.state()).toMatchObject({ page: "editor", activeFileId: "doc" });
+  });
+
+  it("does not take a file another chat or Local showed", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    await openRow(view, PROTOTYPE_CHAT_IDS.deck);
+    expect(view.state().activeFileId).not.toBe("brief");
+    expect(view.state().activeFileId).toBe("slides");
+  });
+
+  it("shows an empty editor area when it has nothing to show", async () => {
+    const view = await shell({ files: prototypeFiles().filter((file) => file.originConversationId !== PROTOTYPE_CHAT_IDS.deck) });
+    await openRow(view, PROTOTYPE_CHAT_IDS.deck);
+    expect(view.state()).toMatchObject({ page: "editor", activeFileId: null });
+    expect(view.find(".dx-chat-empty")).not.toBeNull();
+    expect(view.find(".dx-chat-empty [data-act=show-assets]")).not.toBeNull();
   });
 });
