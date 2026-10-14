@@ -306,6 +306,23 @@ describe("desktop settings service", () => {
     // Only the unsupported field is dropped; the rest of the value stands.
     expect(settings.enterToSend).toBe(false);
   });
+
+  // The provider is written by the Models page straight to the desktop, so
+  // which model is in use cannot be answered from this service's own cache.
+  it("reports the model in use as it is now, not as it was at the first read", async () => {
+    const api = createFakeDesktopApi();
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    await port.settings.patch({ enterToSend: false });
+    expect((await port.settings.get()).selectedModelId).toBe("official");
+
+    await api.updateSettings({
+      llmProvider: { type: "custom", baseUrl: "http://models.example/v1", apiKey: "secret", model: "gpt-6-astra" },
+    });
+
+    const settings = await port.settings.get();
+    expect(settings.selectedModelId).toBe("custom");
+    expect(settings.enterToSend).toBe(false);
+  });
 });
 
 describe("desktop model service", () => {

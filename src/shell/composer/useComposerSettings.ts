@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 
+import { SETTINGS_UPDATED_EVENT } from "../../renderer/useSettings";
 import { usePort } from "../port/PortContext";
 import { settingsStoreFor, type SettingsStore } from "./settingsStore";
 import type { Model, ShellSettings } from "../../shared/uiPort";
@@ -13,6 +14,14 @@ function useSettingsStore(): SettingsStore {
   // In an effect rather than during render: the first read is a side effect on
   // the port, and StrictMode calls render twice.
   useEffect(() => store.load(), [store]);
+  // The desktop's own settings (the LLM provider among them) are written from
+  // the Settings page and onboarding without going through this store, and the
+  // model list is derived from them.
+  useEffect(() => {
+    const onDesktopSettings = () => void store.refresh();
+    window.addEventListener(SETTINGS_UPDATED_EVENT, onDesktopSettings);
+    return () => window.removeEventListener(SETTINGS_UPDATED_EVENT, onDesktopSettings);
+  }, [store]);
   return store;
 }
 
@@ -24,7 +33,10 @@ export interface ComposerSettings {
    * never rejects, and rolls back and reports if it did not (see the store).
    */
   patch: (next: Partial<ShellSettings>) => Promise<boolean>;
-  reloadModels: () => Promise<void>;
+  /** Re-reads the model list and which model is in use; see the store. */
+  refresh: () => Promise<void>;
+  /** Switches the model runs use. Resolves to whether the port did; never rejects. */
+  selectModel: (id: string) => Promise<boolean>;
 }
 
 /**
@@ -49,7 +61,8 @@ export function useComposerSettings(): ComposerSettings {
     value: snapshot.value,
     models: snapshot.models,
     patch: store.patch,
-    reloadModels: store.reloadModels,
+    refresh: store.refresh,
+    selectModel: store.selectModel,
   };
 }
 

@@ -719,6 +719,15 @@ export interface Model {
   provider: string;
   detail?: string;
   custom?: boolean;
+  /**
+   * Set on a model that exists only while it is the one in use: switching away
+   * from it removes it, endpoint and key included.
+   *
+   * The desktop stores a single provider, so its custom entry is one of these.
+   * A picker has to ask before leaving such a model — to the user it is a tick
+   * moving between two rows, and to the port it is deleting a key.
+   */
+  removedOnSwitch?: boolean;
 }
 
 export interface CustomModelInput {

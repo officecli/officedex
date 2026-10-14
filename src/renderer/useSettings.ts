@@ -28,11 +28,13 @@ const FALLBACK: UserSettings = {
 const settingsBus =
   typeof window !== "undefined" && typeof EventTarget !== "undefined" ? new EventTarget() : null;
 const SETTINGS_CHANGED = "officedex:settings-changed";
+/** Fired on `window` after any desktop settings write, for readers outside this hook. */
+export const SETTINGS_UPDATED_EVENT = "officedex:settings-updated";
 
 export function broadcastSettingsChanged(next: UserSettings) {
   settingsBus?.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_CHANGED, { detail: next }));
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent<UserSettings>("officedex:settings-updated", { detail: next }));
+    window.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_UPDATED_EVENT, { detail: next }));
   }
 }
 

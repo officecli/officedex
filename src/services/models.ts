@@ -1,6 +1,7 @@
 import type { DesktopAPI, LlmProvider, LlmProviderType } from "../shared/types";
 import type { CustomModelInput, Model, ModelPort } from "../shared/uiPort";
 import { translate } from "../renderer/i18n";
+import { broadcastSettingsChanged } from "../renderer/useSettings";
 
 /**
  * Models over the desktop's single configured provider.
@@ -40,6 +41,8 @@ function toModel(provider: LlmProvider): Model {
     provider: provider.type,
     detail: provider.baseUrl.trim() || undefined,
     custom: true,
+    // Choosing the official model is clearing the one stored provider.
+    removedOnSwitch: true,
   };
 }
 
@@ -56,6 +59,17 @@ function toProvider(input: CustomModelInput): LlmProvider {
 }
 
 export function createModelService(api: DesktopAPI): ModelPort {
+  /**
+   * Writes the provider and tells the rest of the app.
+   *
+   * The Settings page and the usage notice read the desktop's settings through
+   * `useSettings`, which only hears about writes that are announced; without
+   * this they went on showing a provider this service had just removed.
+   */
+  async function writeProvider(llmProvider: LlmProvider | null): Promise<void> {
+    broadcastSettingsChanged(await api.updateSettings({ llmProvider }));
+  }
+
   return {
     async list() {
       const settings = await api.getSettings();
@@ -65,7 +79,7 @@ export function createModelService(api: DesktopAPI): ModelPort {
 
     async addCustom(input) {
       const provider = toProvider(input);
-      await api.updateSettings({ llmProvider: provider });
+      await writeProvider(provider);
       return toModel(provider);
     },
 
@@ -80,7 +94,7 @@ export function createModelService(api: DesktopAPI): ModelPort {
         const settings = await api.getSettings();
         provider.apiKey = settings.llmProvider?.apiKey ?? "";
       }
-      await api.updateSettings({ llmProvider: provider });
+      await writeProvider(provider);
       return toModel(provider);
     },
 
@@ -103,7 +117,7 @@ export function createModelService(api: DesktopAPI): ModelPort {
      */
     async select(id) {
       if (id === OFFICIAL_MODEL.id) {
-        await api.updateSettings({ llmProvider: null });
+        await writeProvider(null);
         return;
       }
       if (id !== CUSTOM_MODEL_ID) {
@@ -119,7 +133,7 @@ export function createModelService(api: DesktopAPI): ModelPort {
       if (id === OFFICIAL_MODEL.id) {
         throw new Error(translate("shell.service.model.builtinNotRemovable"));
       }
-      await api.updateSettings({ llmProvider: null });
+      await writeProvider(null);
     },
   };
 }
