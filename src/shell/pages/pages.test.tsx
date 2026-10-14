@@ -9,7 +9,7 @@
  * The workspace is the approved prototype's sample data, so the row counts and
  * names below are the ones a reviewer sees side by side with the prototype.
  */
-import { cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { resetLayers } from "../kit/layers";
@@ -261,10 +261,66 @@ describe("Projects & conversations", () => {
     expect(view.find("[data-act=project-view][data-id=archived]")?.getAttribute("aria-pressed")).toBe("true");
     // Nothing has been archived, so the archived view is empty rather than absent.
     expect(view.all(".dx-project-card")).toHaveLength(0);
-    expect(view.find(".dx-empty")?.textContent).toContain("No projects here");
+    expect(view.find(".dx-empty")?.textContent).toContain("Nothing archived");
 
     fireEvent.click(view.find("[data-act=project-view][data-id=active]")!);
     expect(view.all(".dx-project-card")).toHaveLength(2);
+  });
+
+  // 1.0.12 §五: Delete is not Archive — it asks, stops what is running, and
+  // moves the item to Deleted, from where it comes back with its project.
+  const menuItem = (label: string) =>
+    [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === label)!;
+
+  it("moves a deleted conversation to Deleted, stops its run, and restores it", async () => {
+    const view = await openProjects();
+    const finished: (string | undefined)[] = [];
+    view.port.agent.finish = async (taskId) => void finished.push(taskId);
+    const card = view.all(".dx-project-card")[0];
+    const row = [...card.querySelectorAll<HTMLElement>(".dx-recovery-row")].find((entry) => entry.textContent?.includes("Launch plan"))!;
+    fireEvent.click(row.querySelector("[data-act=chat-menu]")!);
+    fireEvent.click(menuItem("Delete"));
+    const dialog = document.querySelector("dialog#dx-modal")!;
+    expect(dialog.textContent).toContain("will move to Deleted");
+    await act(async () => {
+      fireEvent.click(dialog.querySelector(".dx-form-actions .dx-primary")!);
+    });
+
+    expect(view.all(".dx-project-card")[0].textContent).not.toContain("Launch plan");
+    fireEvent.click(view.find("[data-act=project-view][data-id=deleted]")!);
+    const deleted = view.find(".dx-recovery-row")!;
+    expect(deleted.textContent).toContain("Launch plan");
+    fireEvent.click(deleted.querySelector("[data-act=restore-chat]")!);
+    fireEvent.click(view.find("[data-act=project-view][data-id=active]")!);
+    expect(view.all(".dx-project-card")[0].textContent).toContain("Launch plan");
+    // Restoring re-runs nothing.
+    expect(finished.length).toBeLessThanOrEqual(1);
+  });
+
+  it("deletes a project with its conversations, and archives without stopping anything", async () => {
+    const view = await openProjects();
+    let finished = 0;
+    view.port.agent.finish = async () => void (finished += 1);
+
+    fireEvent.click(view.all(".dx-project-card")[1].querySelector("[data-act=project-menu]")!);
+    fireEvent.click(menuItem("Archive"));
+    expect(finished).toBe(0);
+    expect(view.all(".dx-project-card")).toHaveLength(1);
+
+    fireEvent.click(view.all(".dx-project-card")[0].querySelector("[data-act=project-menu]")!);
+    fireEvent.click(menuItem("Delete"));
+    await act(async () => {
+      fireEvent.click(document.querySelector("dialog#dx-modal .dx-form-actions .dx-primary")!);
+    });
+    expect(view.find("#dx-sidebar [data-act=toggle-project]")).toBeNull();
+
+    fireEvent.click(view.find("[data-act=project-view][data-id=deleted]")!);
+    const card = view.find(".dx-project-card")!;
+    expect(card.textContent).toContain("MO product launch");
+    // A deleted project's conversations are listed with it, not openable on their own.
+    expect(card.querySelector("[data-act=open-chat]")).toBeNull();
+    fireEvent.click(card.querySelector("[data-act=restore-project]")!);
+    await waitFor(() => expect(view.find("#dx-sidebar [data-act=toggle-project]")).not.toBeNull());
   });
 });
 

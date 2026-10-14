@@ -14,7 +14,7 @@ import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
 import type { FileMeta } from "../../shared/uiPort";
 import { openSkills } from "../skills/templateLibrary";
-import { useShell, type Project } from "../state/ShellContext";
+import { activeProject, useShell, type Project } from "../state/ShellContext";
 import { FeatureHighlights } from "./FeatureHighlights";
 import { CREATABLE, NEW_GROUPS, recentFiles, type NewType } from "./fileRows";
 
@@ -43,7 +43,8 @@ export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }
   const canvas = useCanvas();
   const recent = useMemo(() => recentFiles(files, RECENT_LIMIT), [files]);
   const homeChat = state.homeChat;
-  const project = homeChat ? (projects.find((entry) => entry.id === homeChat.folderId && !entry.archived) ?? null) : null;
+  const found = homeChat ? projects.find((entry) => entry.id === homeChat.folderId) : undefined;
+  const project = activeProject(found) ? found : null;
   // A draft chat whose project went away falls back to Home's own draft.
   const bound = homeChat && project && homeChat.conversationId ? homeChat : null;
 
@@ -142,7 +143,7 @@ function HomeProjectPicker({ project }: { project: Project | null }) {
             [
               { label: t("dx.home.noProject"), checked: project === null, onSelect: () => entry.resumeProjectDraft(null) },
               ...projects
-                .filter((entry) => !entry.archived)
+                .filter(activeProject)
                 .map((option) => ({
                   label: option.name,
                   checked: option.id === project?.id,

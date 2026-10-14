@@ -47,6 +47,12 @@ export interface ChatMeta {
   pinned?: boolean;
   archived?: boolean;
   /**
+   * Deleted: in Projects → Deleted, restorable (1.0.12 §五). Separate from
+   * archived — archiving only hides, deleting also stopped its runs.
+   */
+  deleted?: boolean;
+  deletedAt?: number;
+  /**
    * Set when the shell created this conversation before any run: the project
    * it lives in. The port's own row, once there is one, says the same thing.
    */
@@ -79,6 +85,9 @@ export interface ChatWorkspace {
 
 export interface ProjectMeta {
   archived?: boolean;
+  /** Deleted with its conversations; see `ChatMeta.deleted`. */
+  deleted?: boolean;
+  deletedAt?: number;
 }
 
 export interface LibraryMeta {

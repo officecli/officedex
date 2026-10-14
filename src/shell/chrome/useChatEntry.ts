@@ -4,7 +4,9 @@ import type { AgentTask, FileMeta } from "../../shared/uiPort";
 import { hasComposerDraft } from "../composer/Composer";
 import { usePort } from "../port/PortContext";
 import { attempt } from "../port/reportPortFailure";
-import { useShell, type Chat } from "../state/ShellContext";
+import { translate } from "../../renderer/i18n";
+import { notice } from "../kit/layers";
+import { activeProject, usableChat, useShell, type Chat } from "../state/ShellContext";
 import { newConversationId } from "../state/libraryMeta";
 
 /** Home's composer, once Home is on screen. */
@@ -35,11 +37,11 @@ export function focusHomeComposer(): void {
  */
 export function useChatEntry() {
   const port = usePort();
-  const { dispatch, chats, chatMeta, files, defaultFolderId, setChatMeta } = useShell();
+  const { dispatch, chats, chatMeta, files, projects, defaultFolderId, setChatMeta } = useShell();
 
   const draftsIn = useCallback(
     (folderId: string) =>
-      chats.filter((chat) => chat.folderId === folderId && !chat.started && chat.draft && !chat.archived),
+      chats.filter((chat) => chat.folderId === folderId && !chat.started && chat.draft && !chat.archived && !chat.deleted),
     [chats],
   );
 
@@ -58,6 +60,13 @@ export function useChatEntry() {
         focusHomeComposer();
         return;
       }
+      // A project just created is not in this render's list yet; only a known
+      // archived or deleted one is refused.
+      const project = projects.find((entry) => entry.id === folderId);
+      if (project && !activeProject(project)) {
+        notice(translate("dx.chat.restoreProjectFirst"));
+        return;
+      }
       const untouched = draftsIn(folderId).find(
         (chat) => !chatMeta[chat.id]?.name && !hasComposerDraft("home", chat.id),
       );
@@ -69,7 +78,7 @@ export function useChatEntry() {
       setChatMeta(conversationId, { folderId, createdAt: Date.now(), draft: true });
       bind(folderId, conversationId);
     },
-    [defaultFolderId, draftsIn, chatMeta, setChatMeta, bind, dispatch],
+    [defaultFolderId, projects, draftsIn, chatMeta, setChatMeta, bind, dispatch],
   );
 
   const resumeProjectDraft = useCallback(
@@ -87,6 +96,11 @@ export function useChatEntry() {
 
   const openChat = useCallback(
     async (chat: Chat) => {
+      // Archived or deleted, or in a project that is: restore it first (§五).
+      if (!usableChat(chat, projects, defaultFolderId)) {
+        notice(translate("dx.chat.openRestoreFirst"));
+        return;
+      }
       if (!chat.started) {
         bind(chat.folderId, chat.id);
         return;
@@ -100,7 +114,7 @@ export function useChatEntry() {
       const fileId = resumeFileFor(chat.id, chatMeta[chat.id]?.workspace?.fileId, task, files);
       dispatch({ type: "resume-chat", chat: { folderId: chat.folderId, conversationId: chat.id }, fileId });
     },
-    [port, chatMeta, files, bind, dispatch],
+    [port, chatMeta, files, projects, defaultFolderId, bind, dispatch],
   );
 
   return { startChat, resumeProjectDraft, openChat };

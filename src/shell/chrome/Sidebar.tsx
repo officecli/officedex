@@ -3,7 +3,7 @@ import { useCallback, type KeyboardEvent, type ReactNode } from "react";
 import { useT } from "../../renderer/i18n";
 import type { Account } from "../account/useAccount";
 import { Icon } from "../kit/Icon";
-import { useShell, type Chat, type Project } from "../state/ShellContext";
+import { activeProject, useShell, type Chat, type Project } from "../state/ShellContext";
 import { sameChat, type AvatarId, type ChatRef } from "../state/shellReducer";
 import { openSkills } from "../skills/templateLibrary";
 import { useChatEntry } from "./useChatEntry";
@@ -72,9 +72,9 @@ export function Sidebar({
   // 1.0.12 §一: an unstarted chat goes back to Home; one with history resumes.
   const openChat = useCallback((chat: Chat) => entry.openChat(chat), [entry]);
 
-  const visibleProjects = projects.filter((project) => !project.archived);
+  const visibleProjects = projects.filter(activeProject);
   const projectIds = new Set(visibleProjects.map((project) => project.id));
-  const liveChats = chats.filter((chat) => !chat.archived);
+  const liveChats = chats.filter((chat) => !chat.archived && !chat.deleted);
   // A conversation whose project is gone from the tree is unfiled, not lost.
   const unfiled = liveChats.filter((chat) => chat.folderId === defaultFolderId || !projectIds.has(chat.folderId));
   const pendingChat: ChatRef | null = state.chat && state.chat.conversationId === null ? state.chat : null;

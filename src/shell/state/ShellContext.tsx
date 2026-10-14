@@ -51,6 +51,8 @@ export interface Chat {
   name: string;
   pinned: boolean;
   archived: boolean;
+  /** In Projects → Deleted (1.0.12 §五). */
+  deleted: boolean;
   /** A run in this conversation is under way. */
   running: boolean;
   /**
@@ -86,8 +88,22 @@ export interface Project {
   id: string;
   name: string;
   archived: boolean;
+  /** In Projects → Deleted, with its conversations (1.0.12 §五). */
+  deleted: boolean;
   folder: Folder;
 }
+
+/** A project the user works in: neither archived nor deleted (1.0.12 §五). */
+export const activeProject = (project: Project | null | undefined): project is Project =>
+  Boolean(project) && !project!.archived && !project!.deleted;
+
+/** A conversation that can be opened: not archived or deleted, and its project is active. */
+export const usableChat = (chat: Chat, projects: readonly Project[], defaultFolderId: string): boolean =>
+  !chat.archived &&
+  !chat.deleted &&
+  (chat.folderId === defaultFolderId ||
+    !projects.some((project) => project.id === chat.folderId) ||
+    activeProject(projects.find((project) => project.id === chat.folderId)));
 
 interface ShellContextValue {
   state: ShellState;
@@ -332,6 +348,7 @@ export function ShellProvider({
           id: folder.id,
           name: folder.name,
           archived: meta.projects[folder.id]?.archived === true,
+          deleted: meta.projects[folder.id]?.deleted === true,
           folder,
         })),
     [folders, meta.projects],
@@ -347,6 +364,7 @@ export function ShellProvider({
         name: own?.name?.trim() || summary.title,
         pinned: own?.pinned === true,
         archived: own?.archived === true,
+        deleted: own?.deleted === true,
         running: RUNNING.has(summary.status),
         started: true,
         draft: false,
@@ -370,6 +388,7 @@ export function ShellProvider({
           name: entry.meta.name?.trim() || translate("dx.chat.untitled"),
           pinned: entry.meta.pinned === true,
           archived: entry.meta.archived === true,
+          deleted: entry.meta.deleted === true,
           running: false,
           started: false,
           draft: entry.meta.draft === true,
