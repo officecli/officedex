@@ -77,8 +77,8 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.546.0",
     "pdfjs-dist": "^3.11.174",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -86,8 +86,8 @@
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.13.10",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.0.4",
     "fflate": "^0.8.3",
     "jsdom": "^26.1.0",
