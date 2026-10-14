@@ -2,8 +2,11 @@ package pptxeditor
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -163,6 +166,52 @@ func TestSaveAssetRequiresDigestAddressedPath(t *testing.T) {
 	}
 	if _, err := service.SaveAsset("token", prepared.SessionID, "media/not-a-digest.png", "image/png", []byte("image")); err == nil {
 		t.Fatal("SaveAsset accepted a non digest-addressed path")
+	}
+}
+
+// A picture written during a session has no inlined copy in the document, so
+// the editor's image load has to be able to get it back by its package path.
+func TestReadAssetReturnsWhatTheSessionSaved(t *testing.T) {
+	root := t.TempDir()
+	sourcePath := filepath.Join(root, "deck.pptx")
+	writeTestPptx(t, sourcePath)
+	service := NewService(&fakeResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: sourcePath, DocumentType: "pptx"},
+	}}, fakeConverter{}, filepath.Join(root, "sessions"))
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := []byte("not really a png, but bytes all the same")
+	relativePath := fmt.Sprintf("media/%x.png", sha256.Sum256(image))
+	if _, err := service.SaveAsset("token", prepared.SessionID, relativePath, "image/png", image); err != nil {
+		t.Fatal(err)
+	}
+
+	data, contentType, err := service.ReadAsset(prepared.SessionID, relativePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, image) || contentType != "image/png" {
+		t.Fatalf("ReadAsset = %d bytes of %q", len(data), contentType)
+	}
+
+	for name, attempt := range map[string]struct{ session, path string }{
+		"another session":     {"not-" + prepared.SessionID, relativePath},
+		"outside the package": {prepared.SessionID, "media/../../deck.pptx"},
+		"not an asset folder": {prepared.SessionID, "content.mop"},
+		"missing":             {prepared.SessionID, "media/absent.png"},
+	} {
+		if _, _, err := service.ReadAsset(attempt.session, attempt.path); err == nil {
+			t.Fatalf("ReadAsset answered for %s", name)
+		}
+	}
+
+	if err := service.Close("token", prepared.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := service.ReadAsset(prepared.SessionID, relativePath); err == nil {
+		t.Fatal("ReadAsset answered for a closed session")
 	}
 }
 

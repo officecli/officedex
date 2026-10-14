@@ -100,6 +100,12 @@ func newAssetFallbackHandler(app *App) http.Handler {
 		case writerfonts.Handles(r.URL.Path):
 			app.writerFontsHandler.ServeHTTP(w, r)
 		default:
+			// A picture of a deck open in an editor session is asked for on
+			// the MOP asset route too, but the MOP store has never heard of
+			// that session; anything it cannot answer falls through.
+			if app.servePptxSessionAsset(w, r) {
+				return
+			}
 			// The MOP handler owns its own prefix check, including the cluster
 			// proxy prefixes it has to strip first, so it stays the default.
 			app.mopHTTPHandler.ServeHTTP(w, r)

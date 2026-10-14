@@ -196,6 +196,7 @@ type pptxEditorService interface {
 	TemplateAssets(string) ([]pptxeditor.Asset, error)
 	SaveSnapshot(string, string, []byte, int, int) (pptxeditor.SaveResult, error)
 	SaveAsset(string, string, string, string, []byte) (pptxeditor.SaveAssetResult, error)
+	ReadAsset(string, string) ([]byte, string, error)
 	SaveVideo(string, string, int, string, []byte) (pptxeditor.VideoSaveResult, error)
 	Export(context.Context, string, string, int) (pptxeditor.SaveResult, error)
 	Close(string, string) error

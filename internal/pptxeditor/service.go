@@ -308,6 +308,51 @@ func (s *Service) SaveAsset(previewToken, sessionID, relativePath, contentType s
 	}, nil
 }
 
+// ReadAsset returns one asset of an open session's package.
+//
+// The editor paints pictures with plain image loads against its asset base
+// URL. Those never pass through the host bridge, which is why assets known at
+// load time are inlined into the document — but a picture written during the
+// session (SaveAsset) is referenced by its mop-asset:/ URI and has no inlined
+// copy, so it stayed blank until the deck was saved and opened again. This
+// gives those loads something to reach.
+//
+// The session ID is the capability: a random UUID handed only to the frame the
+// session was prepared for, and it stops resolving when the session closes.
+func (s *Service) ReadAsset(sessionID, relativePath string) ([]byte, string, error) {
+	cleanPath, err := safeAssetPath(relativePath)
+	if err != nil {
+		return nil, "", err
+	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, "", ErrServiceClosed
+	}
+	session, ok := s.sessions[sessionID]
+	if !ok {
+		s.mu.Unlock()
+		return nil, "", ErrSessionMismatch
+	}
+	target := filepath.Join(session.mopDirectory, filepath.FromSlash(cleanPath))
+	s.mu.Unlock()
+
+	// Lstat, not Stat: a link inside the package must not read outside it.
+	info, err := os.Lstat(target)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, "", errors.New("pptx editor: asset not found")
+	}
+	data, err := readBoundedFile(target, maxAssetBytes)
+	if err != nil {
+		return nil, "", errors.New("pptx editor: asset not found")
+	}
+	contentType := mime.TypeByExtension(filepath.Ext(cleanPath))
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	return data, contentType, nil
+}
+
 // SnapshotResult is a session's document as it currently stands on disk,
 // together with the media it references.
 type SnapshotResult struct {

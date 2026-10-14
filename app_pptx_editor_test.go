@@ -17,6 +17,8 @@ import (
 // layer, so the tests pin the decoding and argument plumbing the renderer
 // depends on. The service itself is covered in internal/pptxeditor.
 type fakePptxEditorService struct {
+	readAsset func(session, relativePath string) ([]byte, string, error)
+
 	prepareToken  string
 	prepareResult pptxeditor.PrepareResult
 	prepareErr    error
@@ -73,6 +75,13 @@ func (s *fakePptxEditorService) SaveSnapshot(token, session string, content []by
 func (s *fakePptxEditorService) SaveAsset(token, session, relativePath, contentType string, data []byte) (pptxeditor.SaveAssetResult, error) {
 	s.assetToken, s.assetSession, s.assetPath, s.assetType, s.assetData = token, session, relativePath, contentType, data
 	return s.assetResult, nil
+}
+
+func (s *fakePptxEditorService) ReadAsset(session, relativePath string) ([]byte, string, error) {
+	if s.readAsset == nil {
+		return nil, "", pptxeditor.ErrSessionMismatch
+	}
+	return s.readAsset(session, relativePath)
 }
 
 func (s *fakePptxEditorService) SaveVideo(token, session string, rev int, name string, data []byte) (pptxeditor.VideoSaveResult, error) {

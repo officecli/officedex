@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"officedex/internal/pptxeditor"
 	"officedex/internal/word2mowhttp"
 	"officedex/internal/writerfonts"
 )
@@ -54,6 +55,59 @@ func TestAssetFallbackRoutesByPrefix(t *testing.T) {
 
 	if mop.hits != 3 || word2mow.hits != 2 || fonts.hits != 2 {
 		t.Fatalf("hits: mop=%d word2mow=%d fonts=%d", mop.hits, word2mow.hits, fonts.hits)
+	}
+}
+
+// A picture drawn into an open deck is loaded by an image element from the MOP
+// asset route. The MOP store does not know editor sessions, so the session has
+// to answer first — and everything it cannot answer must still reach the MOP
+// handler exactly as before.
+func TestAssetFallbackServesAnOpenSessionsAssets(t *testing.T) {
+	mop := &recordingHandler{}
+	editor := &fakePptxEditorService{readAsset: func(session, relativePath string) ([]byte, string, error) {
+		if session != "session-1" || relativePath != "media/abc.png" {
+			return nil, "", pptxeditor.ErrSessionMismatch
+		}
+		return []byte("png-bytes"), "image/png", nil
+	}}
+	handler := newAssetFallbackHandler(&App{
+		mopHTTPHandler:      mop,
+		word2mowHTTPHandler: &recordingHandler{},
+		writerFontsHandler:  &recordingHandler{},
+		pptxEditorService:   editor,
+	})
+
+	for _, path := range []string{
+		"/api/osuite/mop/assets/media/abc.png?fileId=session-1",
+		"/proxy/docs/api/osuite/mop/assets/media/abc.png?fileId=session-1",
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusOK || response.Body.String() != "png-bytes" || response.Header().Get("Content-Type") != "image/png" {
+			t.Fatalf("GET %s = %d %q (%s)", path, response.Code, response.Body.String(), response.Header().Get("Content-Type"))
+		}
+	}
+	if mop.hits != 0 {
+		t.Fatalf("a session asset reached the MOP handler %d times", mop.hits)
+	}
+
+	head := httptest.NewRecorder()
+	handler.ServeHTTP(head, httptest.NewRequest(http.MethodHead, "/api/osuite/mop/assets/media/abc.png?fileId=session-1", nil))
+	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != "9" {
+		t.Fatalf("HEAD = %d, %d body bytes, length %q", head.Code, head.Body.Len(), head.Header().Get("Content-Length"))
+	}
+
+	for _, testCase := range []struct{ method, path string }{
+		{http.MethodGet, "/api/osuite/mop/assets/media/abc.png?fileId=a-mop-package"},
+		{http.MethodGet, "/api/osuite/mop/assets/media/other.png?fileId=session-1"},
+		{http.MethodGet, "/api/osuite/mop/assets/media/abc.png"},
+		{http.MethodPut, "/api/osuite/mop/assets/media/abc.png?fileId=session-1"},
+	} {
+		before := mop.hits
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(testCase.method, testCase.path, nil))
+		if mop.hits != before+1 {
+			t.Fatalf("%s %s did not fall through to the MOP handler", testCase.method, testCase.path)
+		}
 	}
 }
 
