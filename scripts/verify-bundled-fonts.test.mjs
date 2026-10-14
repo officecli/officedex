@@ -82,4 +82,5 @@ test("family detection strips the build hash and the weight suffix", () => {
   assert.equal(fontFamilyOf("inter-latin-600-BvOeHRLc.woff2"), "inter");
   assert.equal(fontFamilyOf("KaTeX_Main-Regular-B22Nviop.woff2"), "katex");
   assert.equal(fontFamilyOf("hy-kai-ti-Cx95UuP2.woff"), "hy");
+  assert.equal(fontFamilyOf("STIXTwoMath-Regular.otf"), "stixtwomath");
 });

@@ -148,7 +148,31 @@ func ExecutableFile(candidate string) string {
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		return ""
 	}
+	// Windows has no execute bit; what runs is decided by the extension, the
+	// same way exec.LookPath decides it (PATHEXT, or its documented default).
+	if runtime.GOOS == "windows" && !hasWindowsExecutableExtension(abs) {
+		return ""
+	}
 	return abs
+}
+
+// hasWindowsExecutableExtension reports whether path ends in one of PATHEXT's
+// extensions (default: .COM;.EXE;.BAT;.CMD), case-insensitively.
+func hasWindowsExecutableExtension(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" {
+		return false
+	}
+	list := os.Getenv("PATHEXT")
+	if strings.TrimSpace(list) == "" {
+		list = ".COM;.EXE;.BAT;.CMD"
+	}
+	for _, candidate := range strings.Split(list, ";") {
+		if candidate != "" && strings.ToLower(candidate) == ext {
+			return true
+		}
+	}
+	return false
 }
 
 // FirstExecutablePath returns the first of names holding a runnable path.
@@ -165,7 +189,7 @@ func FirstExecutablePath(names ...string) string {
 // bare tool name is not runnable on Windows, and a lookup that omits the suffix
 // fails silently -- the caller just sees "not found".
 func ExecutableName(name string) string {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" && !strings.EqualFold(filepath.Ext(name), ".exe") {
 		return name + ".exe"
 	}
 	return name

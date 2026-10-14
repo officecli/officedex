@@ -23,6 +23,13 @@
 # (identity "-"), which is what `wails build` self-signs the outer app with
 # anyway; Gatekeeper will quarantine it on any machine that did not build it.
 #
+# Sibling checkouts are resolved next to the OfficeDex *main* worktree (via the
+# git common dir), so the script also works from a linked worktree. Overrides:
+#   OFFICECLI_INTERNAL_DIR        officecli-internal checkout (officecli rebuild + MOP smoke)
+#   PRESENTATION_SOURCE_DIR       presentation checkout to stage
+#   MOP_CONVERT_BIN               mop-convert binary for TARGET_ARCH
+#   OFFICEDEX_WORD2MOW_CONVERT_SRC  word2mow convert binary for TARGET_ARCH
+#
 # Credentials (notarization only):
 #   NOTARIZE_API_KEY_PATH / NOTARIZE_API_KEY_ID / NOTARIZE_API_ISSUER
 #   or a notarytool keychain profile in NOTARIZE_PROFILE.
@@ -39,6 +46,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/officecli-ldflags.sh
 source "${SCRIPT_DIR}/officecli-ldflags.sh"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# officecli-internal, presentation and ppt2mop sit beside the OfficeDex main
+# worktree. A linked worktree (.claude/worktrees/<name>) has no such siblings,
+# so derive the base from the git common dir rather than from this checkout.
+OFFICEDEX_MAIN_DIR="$(cd "$(dirname "$(git -C "${OFFICEDEX_DIR}" rev-parse --path-format=absolute --git-common-dir)")" && pwd)"
+SIBLINGS_DIR="$(cd "${OFFICEDEX_MAIN_DIR}/.." && pwd)"
+OFFICECLI_INTERNAL="${OFFICECLI_INTERNAL_DIR:-${SIBLINGS_DIR}/officecli-internal}"
+export PRESENTATION_SOURCE_DIR="${PRESENTATION_SOURCE_DIR:-${SIBLINGS_DIR}/presentation}"
 
 # One knob, several vocabularies: Node tarballs say x64, Go says amd64, Mach-O
 # (and therefore lipo) says x86_64. Resolve all of them once so no downstream
@@ -298,6 +312,14 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[${LOG}] prefetching officecli"
   npm run prefetch:officecli
 
+  # word2mow's DOCX <-> MOW converter. prefetch-word2mow-convert.mjs defaults
+  # to the build host's arch, which on an Apple Silicon machine would stage the
+  # arm64 binary into an Intel package (and fail its digest pin). Name the
+  # target arch; the script then takes OFFICEDEX_WORD2MOW_CONVERT_SRC or the
+  # per-arch cache build/cache/word2mow/darwin-<arch>/convert.
+  echo "[${LOG}] staging word2mow convert (darwin-${NODE_ARCH})"
+  npm run prefetch:word2mow -- --platform darwin --arch "${NODE_ARCH}"
+
   # Homebrew's node links against ~20 Cellar dylibs and cannot be redistributed.
   # stage-mop-runtime owns obtaining the pinned self-contained tarball, checking
   # it against the published sums, and proving the staged copy still runs once
@@ -324,7 +346,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   if [[ -z "${MOP_CONVERT_BIN:-}" ]]; then
     for candidate in \
       "${OFFICEDEX_DIR}/build/cache/mop-convert/darwin-${TARGET_ARCH}/mop-convert" \
-      "${OFFICEDEX_DIR}/../ppt2mop/target/${MACHO_ARCH}-apple-darwin/release/mop-convert"
+      "${SIBLINGS_DIR}/ppt2mop/target/${MACHO_ARCH}-apple-darwin/release/mop-convert"
     do
       [[ -f "${candidate}" ]] || continue
       if lipo -archs "${candidate}" 2>/dev/null | grep -qw "${MACHO_ARCH}"; then
@@ -375,13 +397,13 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   if [[ "${SKIP_MOP_SMOKE:-0}" == "1" ]]; then
     echo "[${LOG}] WARNING: SKIP_MOP_SMOKE=1 — this build has NOT drawn a deck with its own runtime" >&2
   else
-    if [[ ! -d "${OFFICEDEX_DIR}/../officecli-internal" ]]; then
-      echo "[${LOG}] the MOP worker smoke needs ../officecli-internal (or SKIP_MOP_SMOKE=1)" >&2
+    if [[ ! -d "${OFFICECLI_INTERNAL}" ]]; then
+      echo "[${LOG}] the MOP worker smoke needs officecli-internal at ${OFFICECLI_INTERNAL} (set OFFICECLI_INTERNAL_DIR, or SKIP_MOP_SMOKE=1)" >&2
       exit 1
     fi
     echo "[${LOG}] drawing a deck with the staged runtime (MOP worker smoke)"
     (
-      cd "${OFFICEDEX_DIR}/../officecli-internal"
+      cd "${OFFICECLI_INTERNAL}"
       OFFICECLI_MOP_SKILL_NODE="${OFFICEDEX_DIR}/build/mop-runtime/bin/node" \
       OFFICECLI_MOP_PRESENTATION_ROOT="${OFFICEDEX_DIR}/build/presentation" \
       PRESENTATION_SOURCE_DIR="${OFFICEDEX_DIR}/build/presentation" \
@@ -393,7 +415,6 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # the bundle, or Vite invalidates the code signature on first write). That
   # worker is `//go:embed`-ed into officecli, so we must rebuild officecli
   # from officecli-internal rather than reuse the fetched release binary.
-  OFFICECLI_INTERNAL="${OFFICEDEX_DIR}/../officecli-internal"
   if [[ -d "${OFFICECLI_INTERNAL}" ]]; then
     echo "[${LOG}] rebuilding officecli from ${OFFICECLI_INTERNAL}"
     (
@@ -424,6 +445,23 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # presentation build drops the ~66MB Office CJK webfont payload because the
   # host OS already provides those families. Pass -s so wails does not rebuild
   # the frontend through its default script.
+  # The renderer imports the Wails bindings in src/renderer/generated/wailsjs.
+  # `wails build` regenerates them, but only after the frontend build -- which
+  # this script runs first (wails gets -s). A fresh clone or a linked worktree
+  # has none yet and vite fails on the missing module, so generate them here.
+  # main.go embeds dist/ (`//go:embed all:dist`), which the frontend build
+  # below is what creates; the Go package does not even load without it, so
+  # give it a placeholder for the duration of the binding generation.
+  echo "[${LOG}] generating Wails bindings"
+  if [[ -d "${OFFICEDEX_DIR}/dist" ]]; then
+    env -u GOROOT wails generate module
+  else
+    mkdir -p "${OFFICEDEX_DIR}/dist"
+    : > "${OFFICEDEX_DIR}/dist/.placeholder"
+    env -u GOROOT wails generate module
+    rm -rf "${OFFICEDEX_DIR}/dist"
+  fi
+
   echo "[${LOG}] building desktop frontend (host fonts, no bundled CJK)"
   npm run build:frontend:desktop
   # Run against the just-built embeds and production Go resource handlers.
@@ -435,6 +473,14 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # Run the sheet path in Chromium and verify native WKWebView before release.
   OFFICEDEX_E2E_SKIP_PREFETCH=1 OFFICEDEX_E2E_BROWSER=chromium \
     node scripts/run-real-e2e.mjs e2e/qa26-rename-real.spec.ts --grep "N26-01 xlsx" --workers=1
+
+  # Writer's default-font closure ships at Resources/writer-fonts, copied from
+  # build/writer-fonts by bundle-runtime.mjs below. Stage it from the current
+  # writer embed every run: 1.0.13 packaged whatever a previous stage had left
+  # behind, so the closure could drift from the writer build it was signed
+  # with. bundle:licenses:mac then runs the bundled-font gate over the result.
+  echo "[${LOG}] staging Writer default-font closure"
+  npm run stage:writer-fonts
 
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   # Build with the checked-in module graph. Automatic tidy also scans archived

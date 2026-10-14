@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"officedex/internal/config"
+	"officedex/internal/office2modoc"
 	"officedex/internal/runtimeenv"
 )
 
@@ -57,6 +58,7 @@ func verifyRuntimeDeps(out io.Writer) bool {
 	nodeOK := reportNodeRuntime(out)
 	report("word2mow convert", resolveWord2MowConvert(), "DOCX editing is unavailable (packaging stages it)")
 	report("writer fonts", resolveWriterFontsRoot(), "DOCX layout has no font metrics (packaging stages it)")
+	report("office2modoc ffi", resolveOffice2modocLibrary(repoRoot), "DOCX/XLSX import has no converter (packaging stages it beside the executable)")
 
 	if converter == "" {
 		fmt.Fprintf(out, "verify-runtime: build the converter into %s, or set %s\n",
@@ -115,4 +117,19 @@ func runVerifyRuntimeIfRequested() {
 		os.Exit(0)
 	}
 	os.Exit(1)
+}
+
+// resolveOffice2modocLibrary is the FFI library the app would load, when it
+// exists: the copy beside the executable first, then the repository cache,
+// then OFFICE2MODOC_FFI_PATH (office2modoc.ResolveLibraryPath). Reported so a
+// packaged app can be checked to load its own copy and not a developer's.
+func resolveOffice2modocLibrary(repoRoot string) string {
+	path, err := office2modoc.ResolveLibraryPath(repoRoot)
+	if err != nil {
+		return ""
+	}
+	if info, statErr := os.Stat(path); statErr != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return path
 }

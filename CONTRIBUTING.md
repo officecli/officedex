@@ -151,7 +151,7 @@ There are two selectable update channels: `stable` at `officedex-dist/manifest.j
 
 Versions are plain `x.y.z`; the client compares three numeric segments and ignores a `-beta` suffix, so pre-release suffixes never trigger an update and are refused by the publish scripts.
 
-### Shipping a release (macOS arm64 today; Intel and Windows are "coming soon")
+### Shipping a release (macOS arm64 and Intel; Windows is built but not yet shipped)
 
 Before final-package acceptance **and again before publishing a Release or update
 manifest**, launch the exact signed app being accepted and trigger an engine
@@ -178,22 +178,54 @@ selected a September build while E2E correctly used the October bundled engine.
 An app version label or a standalone `officecli version` is insufficient.
 
 1. Bump `version` in `package.json` and `productVersion` in `wails.json`.
-2. Compile and notarize on this machine: `bash scripts/build-mac-dmg.sh` (Intel: `TARGET_ARCH=x64`). That writes `dist-artifacts/OfficeDex-<v>-darwin-<arch>.dmg` and the updater zip `OfficeDex-v<v>-darwin-<arch>.zip`.
-3. Create the GitHub Release with both files, keeping the file names (the manifest derives asset URLs from `releases/download/v<v>/<basename>`). Not a pre-release: `releases/latest` must move to it.
+2. Compile and notarize on this machine: `bash scripts/build-mac-dmg.sh` for Apple Silicon, then `TARGET_ARCH=x64 bash scripts/build-mac-dmg.sh` for Intel (see below; the two share `build/bin`, so one after the other). Each writes `dist-artifacts/OfficeDex-<v>-darwin-<arch>.dmg` and the updater zip `OfficeDex-v<v>-darwin-<arch>.zip`.
+3. Create the GitHub Release with all four files, keeping the file names (the manifest derives asset URLs from `releases/download/v<v>/<basename>`). Not a pre-release: `releases/latest` must move to it.
    ```
    gh release create v1.0.13 --title "OfficeDex 1.0.13" --notes-file notes.md \
      dist-artifacts/OfficeDex-1.0.13-darwin-arm64.dmg \
-     dist-artifacts/OfficeDex-v1.0.13-darwin-arm64.zip
+     dist-artifacts/OfficeDex-v1.0.13-darwin-arm64.zip \
+     dist-artifacts/OfficeDex-1.0.13-darwin-x64.dmg \
+     dist-artifacts/OfficeDex-v1.0.13-darwin-x64.zip
    ```
+   An arch that is finished later goes onto the same release: `gh release upload v1.0.13 dist-artifacts/OfficeDex-1.0.13-darwin-x64.dmg dist-artifacts/OfficeDex-v1.0.13-darwin-x64.zip`.
 4. Write the signed manifest into `officedex-dist` and push it:
    ```
    node scripts/publish-update-channel.mjs --channel stable \
      --darwin-arm64 dist-artifacts/OfficeDex-v1.0.13-darwin-arm64.zip \
+     --darwin-amd64 dist-artifacts/OfficeDex-v1.0.13-darwin-x64.zip \
      --notes "..." --dist ../officedex-dist --commit
    git -C ../officedex-dist push
    ```
-   The manifest signing key comes from `~/.officedex-signing/manifest-signing-key.pem` (or `OFFICEDEX_MANIFEST_SIGNING_KEY`); never commit it. Same-version publishes merge assets, so an Intel zip can be added to the same manifest later. `--dry-run [--out-dir dir]` builds and signs without writing.
+   The manifest signing key comes from `~/.officedex-signing/manifest-signing-key.pem` (or `OFFICEDEX_MANIFEST_SIGNING_KEY`); never commit it. Same-version publishes merge assets, so an Intel zip can be added to the same manifest later with just `--darwin-amd64` (the updater looks assets up by `GOOS-GOARCH`, hence `amd64` here and `x64` in the file name). `--dry-run [--out-dir dir]` builds and signs without writing.
 5. Check anonymously that `manifest.json` and `manifest.json.sig` are both served (`?cb=<random>` to skip caches) and that the release assets download.
+
+### Intel (darwin-x64) packages from an Apple Silicon machine
+
+`TARGET_ARCH=x64 bash scripts/build-mac-dmg.sh` cross-compiles the Go side and officecli, but every native payload must already exist for x64; the script asserts each one (with `lipo -archs`) before the long build and names the missing piece. Prepare them once, and again whenever the upstream revision changes:
+
+- **MOP Node runtime**: `node-v24.18.0-darwin-x64.tar.gz` and `node-v24.18.0-SHASUMS256.txt` from nodejs.org in `build/cache/pptxgenjs-runtime/` (the pinned version is `PINNED_NODE_VERSION` in `scripts/stage-mop-runtime.mjs`).
+- **mop-convert** (ppt2mop): in the ppt2mop checkout
+  ```
+  cargo build --release -p pptx2mop --target x86_64-apple-darwin   # add --offline when the private crate registry is unreachable
+  cp target/x86_64-apple-darwin/release/pptx2mop <officedex>/build/cache/mop-convert/darwin-x64/mop-convert
+  ```
+  (`MOP_CONVERT_BIN=<path>` overrides the cache lookup.)
+- **word2mow convert**: the build is pinned by sha256 in `KNOWN_CONVERT_BUILDS` (`scripts/prefetch-word2mow-convert.mjs`), so the registered binary is the one to use. To produce a new one, build from a clean checkout of the pinned revision -- the binary embeds its build path, so a dirty tree or another path yields another digest:
+  ```
+  git -C ../word2mow worktree add --detach /tmp/word2mow-clean <revision>
+  cd /tmp/word2mow-clean && cargo --config cargo.config build --offline --release -p word2mow --bin convert --target x86_64-apple-darwin
+  cp target/x86_64-apple-darwin/release/convert <officedex>/build/cache/word2mow/darwin-x64/convert
+  git -C ../word2mow worktree remove --force /tmp/word2mow-clean
+  ```
+  then register its `shasum -a 256` and revision under `darwin-x64`. `OFFICEDEX_WORD2MOW_CONVERT_SRC=<path>` overrides the cache lookup; the digest check still applies.
+- **office2modoc FFI**: `OFFICE2MODOC_TARGET=x86_64-apple-darwin node scripts/stage-office2modoc-ffi.mjs` copies the checksummed dylib from `../officecli-internal/third_party/office2modoc-ffi/<version>/` (`OFFICE2MODOC_SOURCE_ROOT` overrides) into `build/cache/office2modoc/<version>/darwin-x64/`.
+- **presentation natives**: the presentation checkout must hold the darwin-x64 esbuild / rollup / rolldown / lightningcss packages next to the arm64 ones. Add `supportedArchitectures: { cpu: [arm64, x64] }` to its `pnpm-workspace.yaml` and run `pnpm install` there; `stage:presentation` fails naming the missing package otherwise.
+
+The build runs from a linked worktree as well: sibling checkouts (officecli-internal, presentation, ppt2mop) are resolved next to the main worktree, and `OFFICECLI_INTERNAL_DIR` / `PRESENTATION_SOURCE_DIR` override them. The MOP worker smoke inside the build draws a deck with the staged x64 Node and mop-convert; on an Apple Silicon host Rosetta runs them, so it is not skipped. For a manual check install the DMG and launch the app (its binary is x64-only, so macOS runs it under Rosetta), then generate a PPTX, open and save a DOCX and generate an XLSX; `lipo -archs` on `officedex`, `officecli`, `mop-runtime/bin/node`, `presentation/tools/bin/mop-convert`, `word2mow/convert` and `liboffice2modoc_ffi.dylib` inside the bundle must all say `x86_64`. None of this replaces a run on an Intel Mac before a release.
+
+### Windows (windows-amd64) packages
+
+The Windows package is assembled by `npm run dist:win` (`scripts/dist-win.mjs`), on a Mac or on a Windows machine; `npm run dist:win:installer` adds the NSIS installer `OfficeDex-v<v>-windows-amd64-installer.exe` and the portable `OfficeDex-v<v>-windows-amd64.zip` in `dist-artifacts/`. The inputs it needs (the win-x64 Node zip, the two cross-built Rust converters with their pinned digests, the win32-x64 presentation natives, the office2modoc DLL), what a Mac cannot verify and how a Windows host proves it, the updater's installer contract and the open decisions (Authenticode certificate, install scope, zip vs installer) are all in [docs/windows-build.md](docs/windows-build.md). The Windows checks that need a Windows host run in the private `officecli/officedex-private-builds` repository, never in this public one (its logs and artifacts would expose an unsigned package with private components). Nothing Windows is published yet: the update manifest's `windows-amd64` asset must be the installer (`--windows <installer.exe>`), and it is not added until a signed build has passed acceptance on a Windows 10/11 machine.
 
 Clients on 0.6.x poll the same root manifest and upgrade straight to the current version. Clients on 1.0.6–1.0.12 polled the legacy OBS channel; it was written one last time (`--channel 1.0`) with a stable-channel build and is frozen. `officedex-dist/channels/1.0/` is the even older bridge for 1.0.1–1.0.5 and stays untouched.
 

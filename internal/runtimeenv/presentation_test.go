@@ -50,7 +50,8 @@ func TestPresentationRuntimeEnvPreservesExplicitRoot(t *testing.T) {
 
 func TestPresentationRuntimeEnvInjectsNodeForExplicitRoot(t *testing.T) {
 	dir := t.TempDir()
-	node := filepath.Join(dir, "node")
+	// LookPath on Windows only finds node.exe; the file is never run here.
+	node := filepath.Join(dir, nodeExecutableName())
 	if err := os.WriteFile(node, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}

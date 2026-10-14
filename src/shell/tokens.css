@@ -116,7 +116,7 @@
    * they belong to, as the standard pairs them.
    */
   --dx-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI",
-    sans-serif;
+    "Microsoft YaHei", sans-serif;
   --dx-font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
   --dx-fs-9: 9px;
   --dx-fs-12: 12px;

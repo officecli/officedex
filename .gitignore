@@ -18,6 +18,12 @@ build/mop-runtime/
 build/node-runtime/
 build/node-runtime-x64/
 build/node-runtime-darwin-arm64/
+build/node-runtime-darwin-x64/
+build/node-runtime-*/
+# Windows package assembly (scripts/dist-win.mjs) and its inputs.
+build/win32-x64/
+build/windows-inputs/
+build/windows/installer/tmp/
 build/notarized-backup/
 # Built fegit presentation embed component (npm run build:presentation).
 public/presentation/

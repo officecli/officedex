@@ -3,6 +3,7 @@ package instance
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -24,7 +25,10 @@ func TestLoadOrCreatePersistsStableIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits: Go reports 0666 (or 0444 when the
+	// read-only attribute is set) whatever was asked for, so the owner-only
+	// mode can only be asserted where it exists.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("identity permissions = %o, want 600", info.Mode().Perm())
 	}
 }
